@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Payoff">
 <title>Payoff Tracker</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
 <style>
 :root{
   --bg:#0F1328; --surface:#181D3A; --surface-2:#222951;
@@ -307,6 +310,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
     <div class="group">
       <h3>How your data is saved</h3>
       <p class="hint" style="margin-top:0">Everything stays on this phone, inside this app. Nothing is sent anywhere and there's no account. Each entry is filed under the month it happened, so months start fresh on their own.</p>
+      <p class="hint">Always open it from your home-screen icon. On iPhone, the home-screen app and a regular Safari tab keep separate data.</p>
     </div>
     <input type="file" id="fileIn" accept=".json,.csv,application/json,text/csv,text/plain" hidden>
   </section>
@@ -1234,6 +1238,7 @@ document.querySelectorAll('[data-ic]').forEach(el => { el.outerHTML = ic(el.data
 load();
 openMonths.add(nowKey());
 renderAll();
+if('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>
