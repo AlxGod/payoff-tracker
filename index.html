@@ -173,14 +173,6 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .kv span:first-child{color:var(--muted)}
 .mbody .btn{margin-top:12px}
 
-.nextbill{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:12px 14px;border-radius:18px;background:var(--surface);border:1px solid var(--line);color:var(--muted)}
-.nextbill:not(.soon):not(.late):not(.done) button{color:var(--text);border-color:var(--line-2)}
-.nextbill.soon{background:var(--amber-soft);border-color:rgba(255,178,56,.3);color:var(--amber)}
-.nextbill.late{background:var(--coral-soft);border-color:rgba(255,122,123,.35);color:var(--coral)}
-.nextbill.done{background:var(--teal-soft);border-color:rgba(76,217,176,.3);color:var(--teal)}
-.nx-l{font-size:12px;font-weight:600}
-.nx-t{font-size:15px;font-weight:700;color:var(--text);margin:1px 0}
-.nextbill button{font-size:13px;font-weight:700;padding:9px 12px;border-radius:11px;border:1px solid currentColor;white-space:nowrap}
 .brow{display:flex;align-items:center;gap:12px;padding:4px 4px 4px 14px}
 .brow+.brow{border-top:1px solid var(--line)}
 .brow .row{padding:9px 10px 9px 0;flex:1;min-width:0}
@@ -245,7 +237,6 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
       <div class="pace" id="pace"></div>
       <div class="today" id="today"></div>
     </div>
-    <div id="nextBill"></div>
     <div class="stats">
       <div class="stat"><div class="v inc" id="hEarned"></div><div class="l">earned</div></div>
       <div class="stat"><div class="v exp" id="hSpent"></div><div class="l">spent</div></div>
@@ -655,7 +646,6 @@ function renderHome(){
     $('today').hidden = true;
   }
 
-  renderNextBill(isNow);
   renderNag();
   $('hEarned').textContent = fmt(d.earned);
   $('hSpent').textContent = fmt(d.spent);
@@ -849,31 +839,6 @@ function renderBills(){
       <button class="row" data-edit="b:${b.id}"><span class="rt"><span class="r1">${esc(b.name)}</span><span class="r2 ${i.cls}">${esc(i.text)}</span></span><span class="amt">${fmt2(b.amount)}</span></button>
     </div>`;
   }).join('') + '</div>';
-}
-function renderNextBill(isNow){
-  const el = $('nextBill');
-  const manual = S.bills.filter(b => !b.autopay);
-  if(!isNow || !manual.length){ el.innerHTML = ''; return; }
-  const k = nowKey(), prev = addMonths(k, -1), next = addMonths(k, 1);
-  // Each bill's oldest unpaid month (last month counts only for
-  // "following month" bills, since those come due this month).
-  // Autopay bills take care of themselves, so they're left out.
-  const up = [];
-  manual.forEach(b => {
-    const fk = [b.nextMonth ? prev : null, k, next].find(x => x && !isPaid(x, b.id)) || addMonths(k, 2);
-    up.push({b, k: fk, due: dueDate(b, fk)});
-  });
-  up.sort((a,c) => a.due - c.due);
-  const open = up.filter(x => x.k <= k);
-  const x = up[0], i = billInfo(x.b, x.k);
-  const forTxt = x.b.nextMonth ? 'For ' + monthName(x.k).split(' ')[0] + ' · ' : '';
-  const head = !open.length ? `All caught up · next bill`
-    : (i.late ? 'Overdue bill' : 'Next bill') + (open.length > 1 ? ` · ${open.length - 1} more unpaid` : '');
-  el.innerHTML = `<div class="nextbill ${!open.length ? 'done' : i.late ? 'late' : i.cls === 'due-soon' ? 'soon' : ''}"><div style="min-width:0">
-    <div class="nx-l">${head}</div>
-    <div class="nx-t">${esc(x.b.name)} · ${fmt2(x.b.amount)}</div>
-    <div class="nx-l">${esc(forTxt + i.text)}</div></div>
-    ${open.length ? `<button data-paid-now="${x.b.id}|${x.k}">Mark paid</button>` : ''}</div>`;
 }
 // After adding or changing a bill, ask about a due date that already passed
 // this month (or last month's, for "following month" bills).
@@ -1287,8 +1252,6 @@ document.addEventListener('click', ev => {
   if(r){ const [k, id] = r.dataset.edit.split(':'); k === 'e' ? openEntry(null, id) : k === 't' ? openTrip(id) : openBill(id); return; }
   const p = ev.target.closest('[data-paid]');
   if(p){ togglePaid(p.dataset.paid, viewKey); return; }
-  const pn = ev.target.closest('[data-paid-now]');
-  if(pn){ const [id, k] = pn.dataset.paidNow.split('|'); togglePaid(id, k); return; }
   const c = ev.target.closest('[data-cat]');
   if(c){ eCat = eCat === c.dataset.cat ? null : c.dataset.cat; setType(eType, true); return; }
   const m = ev.target.closest('[data-month]');
