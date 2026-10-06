@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0F1328">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Payoff">
+<title>Payoff Tracker</title>
+<style>
+:root{
+  --bg:#0F1328; --surface:#181D3A; --surface-2:#222951;
+  --line:rgba(244,242,236,.08); --line-2:rgba(244,242,236,.16);
+  --text:#F4F2EC; --muted:#8E96BC; --faint:#626B94;
+  --amber:#FFB238; --on-amber:#2A1A02; --amber-soft:rgba(255,178,56,.14);
+  --teal:#4CD9B0; --teal-soft:rgba(76,217,176,.14);
+  --coral:#FF7A7B; --coral-soft:rgba(255,122,123,.14);
+  --nav:rgba(15,19,40,.86); --scrim:rgba(4,6,16,.6); --lift:0 1px 3px rgba(0,0,0,.35);
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --num:ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#F3F4F9; --surface:#FFFFFF; --surface-2:#ECEEF6;
+  --line:rgba(21,26,51,.08); --line-2:rgba(21,26,51,.16);
+  --text:#151A33; --muted:#5F6790; --faint:#8C93B3;
+  --amber:#C97400; --on-amber:#FFFFFF; --amber-soft:rgba(220,127,0,.12);
+  --teal:#0A9672; --teal-soft:rgba(14,163,126,.12);
+  --coral:#D63F44; --coral-soft:rgba(225,76,80,.11);
+  --nav:rgba(255,255,255,.88); --scrim:rgba(14,18,40,.4); --lift:0 1px 3px rgba(21,26,51,.14);
+  color-scheme:light;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.4;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
+input{font:inherit;color:inherit}
+svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.invisible{visibility:hidden}
+
+#app{max-width:480px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 8px) 16px calc(100px + env(safe-area-inset-bottom))}
+.top{display:flex;align-items:center;justify-content:space-between;min-height:52px;margin-bottom:4px}
+.mnav{display:flex;align-items:center;gap:2px;margin-left:-8px}
+.iconbtn{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--muted)}
+.iconbtn:active{background:var(--surface)}
+.mlabel{font-size:18px;font-weight:700;padding:6px 4px;letter-spacing:-.01em}
+.title{font-size:24px;font-weight:750;letter-spacing:-.02em}
+.streak{font-size:12.5px;font-weight:650;color:var(--amber);background:var(--amber-soft);padding:5px 10px 5px 8px;border-radius:99px;display:inline-flex;gap:4px;align-items:center}
+.streak svg{width:15px;height:15px}
+
+.screen{display:none}
+.screen.active{display:block;animation:fade .22s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:16px}
+.viewing{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--amber-soft);color:var(--amber);border-radius:14px;padding:10px 14px;font-size:13.5px;margin-bottom:12px}
+.viewing button{font-weight:700;white-space:nowrap}
+
+.ring-card{display:flex;flex-direction:column;align-items:center;padding:22px 16px 18px}
+.ring{position:relative;width:212px;height:212px}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:15;stroke-linecap:round}
+.ring .trk{stroke:var(--surface-2)}
+.ring .fil{stroke:var(--amber);transition:stroke-dashoffset .7s cubic-bezier(.2,.8,.2,1),stroke .3s}
+.ring-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.ring-l{font-size:13px;color:var(--muted);font-weight:500}
+.ring-n{font-family:var(--num);font-size:46px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.08}
+.ring-s{font-size:12px;color:var(--muted);margin-top:3px;max-width:150px;line-height:1.35}
+.pace{margin-top:14px;font-size:14.5px;color:var(--muted);text-align:center}
+.pace b{color:var(--text);font-weight:700}
+.today{font-size:12.5px;color:var(--faint);margin-top:4px;text-align:center}
+
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+.stats.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 8px;text-align:center}
+.stat .v{font-family:var(--num);font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat .l{font-size:11.5px;color:var(--muted);margin-top:1px}
+.inc{color:var(--teal)} .exp{color:var(--coral)} .mi{color:var(--amber)}
+
+.quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:6px}
+.qbtn{display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 4px 12px;border-radius:18px;background:var(--surface);border:1px solid var(--line);font-size:12.5px;font-weight:650;text-align:center;transition:transform .12s ease}
+.qbtn:active{transform:scale(.94)}
+.qi{width:42px;height:42px;border-radius:13px;display:grid;place-items:center}
+.qi svg{width:22px;height:22px}
+.qi.inc{background:var(--teal-soft);color:var(--teal)}
+.qi.exp{background:var(--coral-soft);color:var(--coral)}
+.qi.mi{background:var(--amber-soft);color:var(--amber)}
+
+.sec{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:650;color:var(--muted);margin:22px 4px 2px}
+.sec span:last-child{font-weight:500;color:var(--faint)}
+.day{font-size:12px;font-weight:650;color:var(--faint);margin:14px 4px 6px;display:flex;justify-content:space-between}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;width:100%;padding:11px 14px;text-align:left}
+.row+.row{border-top:1px solid var(--line)}
+.row:active{background:var(--surface-2)}
+.dot{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex-shrink:0}
+.dot svg{width:19px;height:19px}
+.dot.inc{background:var(--teal-soft);color:var(--teal)}
+.dot.exp{background:var(--coral-soft);color:var(--coral)}
+.dot.mi{background:var(--amber-soft);color:var(--amber)}
+.rt{flex:1;min-width:0;display:flex;flex-direction:column}
+.r1{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r2{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.amt{font-family:var(--num);font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.empty{text-align:center;color:var(--muted);font-size:14px;padding:30px 24px;line-height:1.55}
+
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border-radius:14px;font-weight:700;font-size:15px;text-align:center}
+.btn.primary{background:var(--amber);color:var(--on-amber)}
+.btn.ghost{background:var(--surface);border:1px solid var(--line)}
+.btn.soft{background:var(--surface-2)}
+.btn.danger{color:var(--coral);font-weight:600}
+.btn:active{opacity:.82}
+.btn svg{width:18px;height:18px}
+
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--nav);-webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+.nav-in{max-width:480px;margin:0 auto;display:flex}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;font-size:11px;font-weight:600;color:var(--faint);text-align:center}
+.nb svg{width:24px;height:24px}
+.nb.active{color:var(--amber)}
+
+.overlay{position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s ease}
+.overlay.show{opacity:1;pointer-events:auto}
+.sheet{width:100%;max-width:480px;background:var(--surface);border-radius:26px 26px 0 0;padding:10px 18px calc(18px + env(safe-area-inset-bottom));max-height:92vh;overflow-y:auto;transform:translateY(28px);transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+.overlay.show .sheet{transform:none}
+.grab{width:40px;height:5px;border-radius:9px;background:var(--line-2);margin:0 auto 14px}
+.sheet h3{margin:0 0 14px;font-size:19px;font-weight:750;letter-spacing:-.01em}
+.seg{display:flex;background:var(--surface-2);border-radius:13px;padding:3px;gap:3px;margin-bottom:14px}
+.seg button{flex:1;padding:9px 0;border-radius:10px;font-size:13.5px;font-weight:650;color:var(--muted);text-align:center}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:var(--lift)}
+.money{display:flex;align-items:center;gap:4px;background:var(--surface-2);border-radius:16px;padding:4px 16px;margin-bottom:14px;border:2px solid transparent}
+.money:focus-within{border-color:var(--amber)}
+.money span{font-family:var(--num);font-size:30px;color:var(--muted);font-weight:600}
+.money input{flex:1;min-width:0;background:none;border:0;outline:0;font-family:var(--num);font-size:34px;font-weight:700;padding:6px 0}
+.money .unit{font-size:16px;font-family:var(--font)}
+.flabel{font-size:12px;font-weight:650;color:var(--muted);margin:0 2px 7px}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+.chip{padding:8px 13px;border-radius:99px;background:var(--surface-2);font-size:13.5px;font-weight:600;color:var(--muted);border:1px solid transparent}
+.chip.on{background:var(--amber-soft);color:var(--amber);border-color:var(--amber)}
+.inp{display:block;width:100%;background:var(--surface-2);border:1px solid transparent;border-radius:12px;padding:12px 14px;font-size:16px;outline:0;margin-bottom:12px;-webkit-appearance:none;appearance:none;min-height:48px}
+.inp:focus{border-color:var(--amber)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.actions{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:4px}
+.odo-out{text-align:center;font-size:13.5px;color:var(--muted);margin:-2px 0 14px}
+.odo-out b{color:var(--amber)}
+
+.mcard{background:var(--surface);border:1px solid var(--line);border-radius:20px;margin-bottom:10px;overflow:hidden}
+.mhead{display:flex;align-items:center;gap:10px;width:100%;padding:14px 16px 12px}
+.mhead>div{flex:1;min-width:0}
+.mt{font-weight:700;font-size:16px}
+.ms{font-size:12.5px;color:var(--muted);margin-top:2px}
+.pill{font-size:12px;font-weight:700;padding:4px 10px;border-radius:99px;white-space:nowrap}
+.pill.ok{background:var(--teal-soft);color:var(--teal)}
+.pill.short{background:var(--coral-soft);color:var(--coral)}
+.pill.go{background:var(--amber-soft);color:var(--amber)}
+.chev{color:var(--faint);transition:transform .2s ease;display:grid}
+.mcard.open .chev{transform:rotate(180deg)}
+.bar{height:7px;background:var(--surface-2);border-radius:9px;margin:0 16px 14px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--amber);border-radius:9px}
+.bar.ok span{background:var(--teal)}
+.mbody{display:none;padding:2px 16px 14px;border-top:1px solid var(--line)}
+.mcard.open .mbody{display:block}
+.bk{margin-top:14px}
+.bk h4{margin:0 0 8px;font-size:12px;font-weight:650;color:var(--muted)}
+.bkrow{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:14px;margin-bottom:9px}
+.bkrow .amt{font-size:14px}
+.bkbar{grid-column:1/-1;height:5px;border-radius:9px;background:var(--surface-2);overflow:hidden}
+.bkbar span{display:block;height:100%;border-radius:9px}
+.kv{display:flex;justify-content:space-between;font-size:14px;padding:4px 0}
+.kv span:first-child{color:var(--muted)}
+.mbody .btn{margin-top:12px}
+
+.group{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:16px;margin-bottom:14px}
+.group h3{margin:0 0 12px;font-size:15.5px;font-weight:700}
+.group .stats{margin:0}
+.group .stat{background:var(--surface-2);border:0}
+.field{margin-bottom:4px}
+.field label{display:block;font-size:12.5px;font-weight:650;color:var(--muted);margin:0 2px 7px}
+.hint{font-size:13px;color:var(--muted);line-height:1.55;margin:8px 2px 0}
+.hint b{color:var(--text)}
+.stack>*+*{margin-top:10px}
+
+.toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom));transform:translate(-50%,16px);opacity:0;z-index:80;background:var(--text);color:var(--bg);border-radius:14px;padding:12px 16px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:14px;transition:opacity .22s ease,transform .22s ease;max-width:calc(100% - 32px);pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast.has-undo{padding:8px 8px 8px 16px}
+.toast button{background:var(--amber);color:var(--on-amber);padding:7px 13px;border-radius:9px;font-weight:700;font-size:13.5px}
+.confetti{position:fixed;top:-14px;width:8px;height:14px;border-radius:2px;z-index:90;pointer-events:none;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(106vh) rotate(560deg);opacity:.3}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="mnav" id="mnav">
+      <button class="iconbtn" id="prevM" aria-label="Previous month" onclick="shiftMonth(-1)"><i data-ic="left"></i></button>
+      <button class="mlabel" id="mLabel" onclick="goNow()"></button>
+      <button class="iconbtn" id="nextM" aria-label="Next month" onclick="shiftMonth(1)"><i data-ic="right"></i></button>
+    </div>
+    <div class="title" id="ttl" hidden></div>
+    <span class="streak" id="streak" hidden></span>
+  </header>
+
+  <!-- HOME -->
+  <section class="screen active" id="s-home">
+    <div class="viewing" id="viewH" hidden><span>Looking back at a past month</span><button onclick="goNow()">Back to now</button></div>
+    <div class="card ring-card">
+      <div class="ring">
+        <svg viewBox="0 0 200 200"><circle class="trk" cx="100" cy="100" r="86"/><circle class="fil" id="ringFill" cx="100" cy="100" r="86"/></svg>
+        <div class="ring-c"><div class="ring-l" id="ringL"></div><div class="ring-n" id="ringN"></div><div class="ring-s" id="ringS"></div></div>
+      </div>
+      <div class="pace" id="pace"></div>
+      <div class="today" id="today"></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="v inc" id="hEarned"></div><div class="l">earned</div></div>
+      <div class="stat"><div class="v exp" id="hSpent"></div><div class="l">spent</div></div>
+      <div class="stat"><div class="v" id="hMiles"></div><div class="l">driven</div></div>
+    </div>
+    <div class="quick">
+      <button class="qbtn" onclick="openEntry('income')"><span class="qi inc"><i data-ic="cash"></i></span>Earned</button>
+      <button class="qbtn" onclick="openEntry('gas')"><span class="qi exp"><i data-ic="gas"></i></span>Gas</button>
+      <button class="qbtn" onclick="openEntry('purchase')"><span class="qi exp"><i data-ic="bag"></i></span>Spent</button>
+      <button class="qbtn" onclick="openTrip()"><span class="qi mi"><i data-ic="road"></i></span>Miles</button>
+    </div>
+    <div id="homeList"></div>
+  </section>
+
+  <!-- MONTHS -->
+  <section class="screen" id="s-months">
+    <div id="yearCard"></div>
+    <div id="monthCards"></div>
+  </section>
+
+  <!-- MILES -->
+  <section class="screen" id="s-miles">
+    <div class="viewing" id="viewM" hidden><span>Looking back at a past month</span><button onclick="goNow()">Back to now</button></div>
+    <div class="stats two" style="margin-top:0">
+      <div class="stat"><div class="v mi" id="mMiles"></div><div class="l">miles this month</div></div>
+      <div class="stat"><div class="v" id="mDed"></div><div class="l">est. deduction</div></div>
+      <div class="stat"><div class="v" id="yMiles"></div><div class="l" id="yMilesL">miles this year</div></div>
+      <div class="stat"><div class="v" id="yDed"></div><div class="l">est. deduction</div></div>
+    </div>
+    <button class="btn primary" onclick="openTrip()"><i data-ic="plus"></i>Log a trip</button>
+    <div id="tripList"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="screen" id="s-settings">
+    <div class="group">
+      <h3>Appearance</h3>
+      <div class="seg" id="themeSeg" style="margin:0">
+        <button data-theme-btn="auto" onclick="setTheme('auto')">Match phone</button>
+        <button data-theme-btn="dark" onclick="setTheme('dark')">Dark</button>
+        <button data-theme-btn="light" onclick="setTheme('light')">Light</button>
+      </div>
+    </div>
+    <div class="group">
+      <h3>Your numbers</h3>
+      <div class="field">
+        <label for="goalIn">Monthly bills to cover ($)</label>
+        <input class="inp" id="goalIn" inputmode="decimal" placeholder="660">
+      </div>
+      <div class="field">
+        <label for="rateIn">Mileage deduction rate ($ per mile)</label>
+        <input class="inp" id="rateIn" inputmode="decimal" placeholder="0.70">
+      </div>
+      <button class="btn primary" onclick="saveSettings()">Save</button>
+      <p class="hint">A new bills total applies to this month and future months. Past months keep the total they had.</p>
+    </div>
+    <div class="group stack">
+      <h3>Export</h3>
+      <button class="btn soft" onclick="exportCSV('month')"><i data-ic="download"></i><span id="expMonthLbl">Export this month</span></button>
+      <button class="btn soft" onclick="exportCSV('year')"><i data-ic="download"></i><span id="expYearLbl">Export this year</span></button>
+      <p class="hint">Saves a spreadsheet file (CSV) of your earnings, spending and miles. Handy for taxes.</p>
+    </div>
+    <div class="group">
+      <h3>How your data is saved</h3>
+      <p class="hint" style="margin-top:0">Everything stays on this phone, inside this app. Nothing is sent anywhere and there's no account. Each entry is filed under the month it happened, so months start fresh on their own.</p>
+    </div>
+  </section>
+</div>
+
+<nav class="nav"><div class="nav-in">
+  <button class="nb active" data-tab="home" onclick="switchTab('home')"><i data-ic="home"></i>Home</button>
+  <button class="nb" data-tab="months" onclick="switchTab('months')"><i data-ic="chart"></i>Months</button>
+  <button class="nb" data-tab="miles" onclick="switchTab('miles')"><i data-ic="road"></i>Miles</button>
+  <button class="nb" data-tab="settings" onclick="switchTab('settings')"><i data-ic="sliders"></i>Settings</button>
+</div></nav>
+
+<!-- Entry sheet -->
+<div class="overlay" id="entrySheet">
+  <div class="sheet" role="dialog" aria-labelledby="eTitle">
+    <div class="grab"></div>
+    <h3 id="eTitle">Add</h3>
+    <div class="seg" id="typeSeg">
+      <button data-type="income" onclick="setType('income')">Earned</button>
+      <button data-type="gas" onclick="setType('gas')">Gas</button>
+      <button data-type="purchase" onclick="setType('purchase')">Spent</button>
+    </div>
+    <div class="money"><span>$</span><input id="eAmt" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+    <div id="eCatWrap"><div class="flabel">Category</div><div class="chips" id="eChips"></div></div>
+    <div class="flabel">Date</div>
+    <input class="inp" type="date" id="eDate">
+    <input class="inp" id="eNote" placeholder="Note (optional)" autocomplete="off">
+    <div class="actions">
+      <button class="btn soft" onclick="closeSheets()">Cancel</button>
+      <button class="btn primary" onclick="saveEntry()">Save</button>
+    </div>
+    <button class="btn danger" id="eDel" onclick="deleteItem('e')">Delete entry</button>
+  </div>
+</div>
+
+<!-- Trip sheet -->
+<div class="overlay" id="tripSheet">
+  <div class="sheet" role="dialog" aria-labelledby="tTitle">
+    <div class="grab"></div>
+    <h3 id="tTitle">Log a trip</h3>
+    <div class="seg">
+      <button data-mode="total" onclick="setMode('total')">Total miles</button>
+      <button data-mode="odo" onclick="setMode('odo')">Odometer</button>
+    </div>
+    <div id="tTotalWrap"><div class="money"><input id="tMiles" inputmode="decimal" placeholder="0" autocomplete="off"><span class="unit">miles</span></div></div>
+    <div id="tOdoWrap">
+      <div class="pair">
+        <div><div class="flabel">Start</div><input class="inp" id="tStart" inputmode="decimal" placeholder="0" oninput="updOdo()"></div>
+        <div><div class="flabel">End</div><input class="inp" id="tEnd" inputmode="decimal" placeholder="0" oninput="updOdo()"></div>
+      </div>
+      <div class="odo-out">= <b id="tOdoOut">0</b> miles</div>
+    </div>
+    <div class="flabel">Date</div>
+    <input class="inp" type="date" id="tDate">
+    <input class="inp" id="tNote" placeholder="Note (optional)" autocomplete="off">
+    <div class="actions">
+      <button class="btn soft" onclick="closeSheets()">Cancel</button>
+      <button class="btn primary" onclick="saveTrip()">Save</button>
+    </div>
+    <button class="btn danger" id="tDel" onclick="deleteItem('t')">Delete trip</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"><span id="toastMsg"></span><button id="toastUndo" hidden>Undo</button></div>
+
+<script>
+/* Data is kept in this browser's localStorage under KEY. Never rename KEY:
+   that would hide everyone's saved data. Add new fields to defaults() and
+   normalize() instead. */
+const KEY = 'payoff-tracker-v1';
+const OLD_KEY = 'route-to-zero-data';
+const INCOME_CATS = ['DoorDash','Cash','Other job','Other'];
+const EXPENSE_CATS = ['Food','Car maintenance','Phone','Supplies','Personal','Other'];
+const TYPES = {
+  income:   {label:'Earned', icon:'cash', cls:'inc'},
+  gas:      {label:'Gas',    icon:'gas',  cls:'exp'},
+  purchase: {label:'Spent',  icon:'bag',  cls:'exp'}
+};
+const ICONS = {
+  home:'<path d="M5 12H3l9-9 9 9h-2"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M10 21v-5a2 2 0 0 1 4 0v5"/>',
+  chart:'<path d="M4 20h16"/><rect x="5" y="11" width="3.2" height="6" rx="1"/><rect x="10.4" y="5" width="3.2" height="12" rx="1"/><rect x="15.8" y="8" width="3.2" height="9" rx="1"/>',
+  road:'<path d="M5 20 9 4"/><path d="M19 20 15 4"/><path d="M12 5.5v2"/><path d="M12 11v2"/><path d="M12 16.5v2"/>',
+  sliders:'<circle cx="14" cy="6" r="2"/><path d="M4 6h8M16 6h4"/><circle cx="8" cy="12" r="2"/><path d="M4 12h2M10 12h10"/><circle cx="17" cy="18" r="2"/><path d="M4 18h11M19 18h1"/>',
+  cash:'<rect x="3" y="6" width="18" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.5"/><path d="M6.5 9.5h.01M17.5 14.5h.01"/>',
+  gas:'<path d="M5 20V6a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v14"/><path d="M3.5 20h12"/><path d="M5 10h9"/><path d="M14 8h1.5a2 2 0 0 1 2 2v5.5a1.5 1.5 0 0 0 3 0V8.5L18 6"/>',
+  bag:'<path d="M5.5 8h13l-1 12.5h-11z"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/>',
+  left:'<path d="M15 6l-6 6 6 6"/>',
+  right:'<path d="M9 6l6 6-6 6"/>',
+  down:'<path d="M6 9l6 6 6-6"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  flame:'<path d="M12 3c.5 3.5 5 5.5 5 10.5a5 5 0 0 1-10 0c0-2.5 1.5-3.8 2.5-5 .3 1.6 1.2 2.6 2.3 2.8C11.5 9 11 6 12 3z"/>',
+  download:'<path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>'
+};
+const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
+const $ = id => document.getElementById(id);
+
+let S = null;          // saved state
+let viewKey = null;    // month being viewed, "YYYY-MM"
+let tab = 'home';
+let lastNowKey = null;
+let editing = null;    // {kind:'e'|'t', id} while editing an existing item
+let eType = 'income', eCat = null, tMode = 'total';
+const openMonths = new Set();
+
+/* ---------- helpers ---------- */
+const pad = n => String(n).padStart(2,'0');
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const sum = (arr, f) => arr.reduce((a,x) => a + x[f], 0);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function fmt(n){ const r = Math.round(n); return (r < 0 ? '-' : '') + '$' + Math.abs(r).toLocaleString(); }
+function fmt2(n){ return '$' + Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); }
+function miles1(n){ return (Math.round(n*10)/10).toLocaleString(undefined,{maximumFractionDigits:1}); }
+function mk(ts){ const d = new Date(ts); return d.getFullYear() + '-' + pad(d.getMonth()+1); }
+function nowKey(){ return mk(Date.now()); }
+function keyParts(k){ const [y,m] = k.split('-').map(Number); return {y, m}; }
+function addMonths(k, n){ const {y,m} = keyParts(k); const d = new Date(y, m-1+n, 1); return d.getFullYear() + '-' + pad(d.getMonth()+1); }
+function monthName(k, short){ const {y,m} = keyParts(k); return new Date(y, m-1, 1).toLocaleDateString(undefined, {month: short ? 'short' : 'long', year:'numeric'}); }
+function daysInMonth(k){ const {y,m} = keyParts(k); return new Date(y, m, 0).getDate(); }
+function dateStr(ts){ const d = new Date(ts); return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+function timeStr(ts){ return new Date(ts).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'}); }
+function dayLabel(ts){
+  const today = new Date(); const y = new Date(); y.setDate(y.getDate()-1);
+  const s = dateStr(ts);
+  if(s === dateStr(today)) return 'Today';
+  if(s === dateStr(y)) return 'Yesterday';
+  return new Date(ts).toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'});
+}
+// Turn a date-picker value into a timestamp. Keeps the original time when the
+// date didn't change, uses "now" for today, and noon for any other day.
+function tsFromDate(str, origTs){
+  if(!str) return origTs ?? Date.now();
+  if(origTs != null && dateStr(origTs) === str) return origTs;
+  if(str === dateStr(Date.now())) return Date.now();
+  const [y,m,d] = str.split('-').map(Number);
+  return new Date(y, m-1, d, 12, 0).getTime();
+}
+function cleanNum(el){
+  let v = el.value.replace(/[^0-9.]/g, '');
+  const i = v.indexOf('.');
+  if(i !== -1) v = v.slice(0, i+1) + v.slice(i+1).replace(/\./g, '');
+  if(v !== el.value) el.value = v;
+}
+
+/* ---------- saving and loading ---------- */
+function defaults(){
+  return {version:1, entries:[], trips:[], goal:660, monthGoals:{}, mileageRate:0.70,
+          lastOdometer:null, theme:'auto', lastIncomeCat:'DoorDash'};
+}
+function normalize(d){
+  const s = {...defaults(), ...d};
+  s.entries = (Array.isArray(s.entries) ? s.entries : [])
+    .filter(e => e && isFinite(e.amount) && isFinite(e.ts))
+    .map(e => ({id: e.id || uid(), type: TYPES[e.type] ? e.type : 'purchase',
+                amount: +e.amount, category: e.category || null, note: e.note || '', ts: +e.ts}));
+  s.trips = (Array.isArray(s.trips) ? s.trips : [])
+    .filter(t => t && isFinite(t.miles) && isFinite(t.ts))
+    .map(t => ({id: t.id || uid(), miles: +t.miles, note: t.note || '', ts: +t.ts,
+                odoStart: isFinite(t.odoStart) && t.odoStart !== null ? +t.odoStart : null,
+                odoEnd: isFinite(t.odoEnd) && t.odoEnd !== null ? +t.odoEnd : null}));
+  if(!s.monthGoals || typeof s.monthGoals !== 'object') s.monthGoals = {};
+  if(!['auto','dark','light'].includes(s.theme)) s.theme = 'auto';
+  return s;
+}
+// Converts data saved by the old "Route to Zero" version (same device and address only).
+function fromOldFormat(o){
+  const tx = [...(o.transactions || [])], trips = [...(o.trips || [])];
+  (o.monthsHistory || []).forEach(m => { tx.push(...(m.transactions || [])); trips.push(...(m.trips || [])); });
+  return {
+    entries: tx.map(t => t.type === 'custom' ? {...t, type:'purchase', category: t.category || 'Other'} : t),
+    trips, goal: o.goal || 660, mileageRate: o.mileageRate || 0.70,
+    lastOdometer: o.lastOdometer ?? null, theme: o.theme || 'auto'
+  };
+}
+function load(){
+  let data = null;
+  try{ const raw = localStorage.getItem(KEY); if(raw) data = JSON.parse(raw); }catch(e){}
+  if(!data){
+    try{ const old = JSON.parse(localStorage.getItem(OLD_KEY) || 'null'); if(old) data = fromOldFormat(old); }catch(e){}
+  }
+  S = normalize(data || {});
+  lastNowKey = nowKey();
+  viewKey = lastNowKey;
+  if(S.monthGoals[lastNowKey] == null) S.monthGoals[lastNowKey] = S.goal;
+  save();
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch(e){ toast("Couldn't save. Your phone's storage may be full."); }
+}
+
+/* ---------- numbers for a month ---------- */
+function goalFor(k){ return S.monthGoals[k] ?? S.goal; }
+function monthData(k){
+  const entries = S.entries.filter(e => mk(e.ts) === k);
+  const trips = S.trips.filter(t => mk(t.ts) === k);
+  const earned = sum(entries.filter(e => e.type === 'income'), 'amount');
+  const spent = sum(entries.filter(e => e.type !== 'income'), 'amount');
+  const miles = sum(trips, 'miles');
+  const goal = goalFor(k);
+  const need = goal + spent;
+  return {k, entries, trips, earned, spent, miles, goal, need, left: need - earned};
+}
+function computeStreak(){
+  const days = new Set(S.entries.filter(e => e.type === 'income').map(e => dateStr(e.ts)));
+  const c = new Date();
+  if(!days.has(dateStr(c))) c.setDate(c.getDate()-1);
+  let n = 0;
+  while(days.has(dateStr(c))){ n++; c.setDate(c.getDate()-1); }
+  return n;
+}
+
+/* ---------- theme ---------- */
+const mq = window.matchMedia ? matchMedia('(prefers-color-scheme: light)') : null;
+function applyTheme(){
+  const t = S.theme === 'auto' ? (mq && mq.matches ? 'light' : 'dark') : S.theme;
+  document.documentElement.dataset.theme = t;
+  document.querySelector('meta[name=theme-color]').content = t === 'light' ? '#F3F4F9' : '#0F1328';
+  document.querySelectorAll('[data-theme-btn]').forEach(b => b.classList.toggle('on', b.dataset.themeBtn === S.theme));
+}
+function setTheme(t){ S.theme = t; save(); applyTheme(); }
+if(mq){ mq.addEventListener ? mq.addEventListener('change', applyTheme) : mq.addListener(applyTheme); }
+
+/* ---------- navigation ---------- */
+function switchTab(t){
+  tab = t;
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 's-' + t));
+  document.querySelectorAll('.nb').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  if(t === 'settings'){ $('goalIn').value = goalFor(nowKey()); $('rateIn').value = S.mileageRate; }
+  renderAll();
+  window.scrollTo(0, 0);
+}
+function shiftMonth(n){
+  const k = addMonths(viewKey, n);
+  if(k > nowKey()) return;
+  viewKey = k; renderAll();
+}
+function goNow(){ viewKey = nowKey(); renderAll(); }
+
+/* ---------- rendering ---------- */
+function renderAll(){ renderHeader(); renderHome(); renderMiles(); renderMonths(); renderSettings(); }
+
+function renderHeader(){
+  const monthTab = tab === 'home' || tab === 'miles';
+  $('mnav').hidden = !monthTab;
+  $('ttl').hidden = monthTab;
+  $('ttl').textContent = tab === 'months' ? 'Months' : 'Settings';
+  $('mLabel').textContent = monthName(viewKey);
+  $('nextM').classList.toggle('invisible', viewKey >= nowKey());
+  const past = viewKey !== nowKey();
+  $('viewH').hidden = !past; $('viewM').hidden = !past;
+  const st = computeStreak();
+  $('streak').hidden = st < 2;
+  $('streak').innerHTML = ic('flame') + st + ' days';
+  $('streak').title = 'Days in a row you earned money';
+}
+
+function renderHome(){
+  const d = monthData(viewKey);
+  const isNow = viewKey === nowKey();
+  const covered = d.left <= 0;
+  const frac = d.need > 0 ? Math.min(Math.max(d.earned / d.need, 0), 1) : 1;
+  const C = 2 * Math.PI * 86;
+  const fill = $('ringFill');
+  fill.style.strokeDasharray = C;
+  fill.style.strokeDashoffset = C * (1 - frac);
+  fill.style.stroke = covered ? 'var(--teal)' : 'var(--amber)';
+  fill.style.opacity = frac === 0 ? 0 : 1;
+
+  if(covered){
+    $('ringL').textContent = d.left < 0 ? 'ahead of your goal' : 'goal reached';
+    $('ringN').textContent = fmt(-d.left);
+    $('ringN').style.color = 'var(--teal)';
+    $('ringS').textContent = fmt(d.goal) + ' in bills covered';
+  } else {
+    $('ringL').textContent = isNow ? 'left to cover' : 'came up short';
+    $('ringN').textContent = fmt(d.left);
+    $('ringN').style.color = '';
+    $('ringS').textContent = d.spent > 0 ? fmt(d.goal) + ' bills + ' + fmt(d.spent) + ' spent' : 'of ' + fmt(d.goal) + ' in bills';
+  }
+
+  if(isNow){
+    const daysLeft = daysInMonth(viewKey) - new Date().getDate() + 1;
+    const dl = daysLeft + ' day' + (daysLeft === 1 ? '' : 's');
+    $('pace').innerHTML = covered
+      ? `You're covered for the month, with <b>${dl}</b> to go`
+      : `About <b>${fmt(Math.ceil(d.left / daysLeft))}/day</b> for the next ${dl}`;
+    const tE = d.entries.filter(e => dateStr(e.ts) === dateStr(Date.now()));
+    const tI = sum(tE.filter(e => e.type === 'income'), 'amount');
+    const tS = sum(tE.filter(e => e.type !== 'income'), 'amount');
+    const tM = sum(d.trips.filter(t => dateStr(t.ts) === dateStr(Date.now())), 'miles');
+    $('today').hidden = !(tI || tS || tM);
+    $('today').textContent = `Today: +${fmt(tI)} earned · ${fmt(tS)} spent · ${miles1(tM)} mi`;
+  } else {
+    $('pace').innerHTML = covered
+      ? `This month ended <b>${fmt(-d.left)}</b> ahead`
+      : `This month ended <b>${fmt(d.left)}</b> short`;
+    $('today').hidden = true;
+  }
+
+  $('hEarned').textContent = fmt(d.earned);
+  $('hSpent').textContent = fmt(d.spent);
+  $('hMiles').textContent = miles1(d.miles) + ' mi';
+
+  const n = d.entries.length + d.trips.length;
+  $('homeList').innerHTML =
+    `<div class="sec"><span>${isNow ? 'This month' : esc(monthName(viewKey))}</span><span>${n ? n + (n === 1 ? ' entry' : ' entries') : ''}</span></div>` +
+    (n ? activityList(d.entries, d.trips)
+       : `<div class="empty">${isNow ? 'Nothing logged yet this month. Tap a button above when you earn or spend money.' : 'Nothing was logged this month.'}</div>`);
+}
+
+function activityList(entries, trips){
+  const items = [...entries.map(e => ({ts:e.ts, html:entryRow(e)})), ...trips.map(t => ({ts:t.ts, html:tripRow(t)}))]
+    .sort((a,b) => b.ts - a.ts);
+  let out = '', curDay = null;
+  items.forEach(it => {
+    const day = dateStr(it.ts);
+    if(day !== curDay){
+      if(curDay) out += '</div>';
+      out += `<div class="day"><span>${esc(dayLabel(it.ts))}</span></div><div class="list">`;
+      curDay = day;
+    }
+    out += it.html;
+  });
+  return out + (curDay ? '</div>' : '');
+}
+function entryRow(e){
+  const T = TYPES[e.type];
+  const title = e.note || e.category || T.label;
+  const sub = [e.note && e.category ? e.category : (e.note ? T.label : ''), timeStr(e.ts)].filter(Boolean).join(' · ');
+  return `<button class="row" data-edit="e:${e.id}">
+    <span class="dot ${T.cls}">${ic(T.icon)}</span>
+    <span class="rt"><span class="r1">${esc(title)}</span><span class="r2">${esc(sub)}</span></span>
+    <span class="amt ${T.cls}">${e.type === 'income' ? '+' : '−'}${fmt2(e.amount)}</span></button>`;
+}
+function tripRow(t){
+  const sub = [t.odoStart != null ? 'Odometer ' + t.odoStart + ' → ' + t.odoEnd : '', timeStr(t.ts)].filter(Boolean).join(' · ');
+  return `<button class="row" data-edit="t:${t.id}">
+    <span class="dot mi">${ic('road')}</span>
+    <span class="rt"><span class="r1">${esc(t.note || 'Trip')}</span><span class="r2">${esc(sub)}</span></span>
+    <span class="amt mi">${miles1(t.miles)} mi</span></button>`;
+}
+
+function renderMiles(){
+  const d = monthData(viewKey);
+  const yr = keyParts(viewKey).y;
+  const yM = sum(S.trips.filter(t => new Date(t.ts).getFullYear() === yr), 'miles');
+  $('mMiles').textContent = miles1(d.miles);
+  $('mDed').textContent = fmt(d.miles * S.mileageRate);
+  $('yMiles').textContent = miles1(yM);
+  $('yMilesL').textContent = 'miles in ' + yr;
+  $('yDed').textContent = fmt(yM * S.mileageRate);
+  $('tripList').innerHTML = d.trips.length
+    ? activityList([], d.trips)
+    : `<div class="empty">No trips logged ${viewKey === nowKey() ? 'yet this month' : 'this month'}. Every mile you log adds to your tax deduction.</div>`;
+}
+
+function breakdown(title, map, color){
+  const rows = Object.entries(map).filter(r => r[1] > 0).sort((a,b) => b[1] - a[1]);
+  if(!rows.length) return '';
+  const max = rows[0][1];
+  return `<div class="bk"><h4>${title}</h4>${rows.map(([k,v]) => `<div class="bkrow"><span>${esc(k)}</span><span class="amt">${fmt2(v)}</span><div class="bkbar"><span style="width:${(v/max*100).toFixed(1)}%;background:var(--${color})"></span></div></div>`).join('')}</div>`;
+}
+function renderMonths(){
+  const nk = nowKey();
+  const keys = new Set([nk]);
+  S.entries.forEach(e => keys.add(mk(e.ts)));
+  S.trips.forEach(t => keys.add(mk(t.ts)));
+  const list = [...keys].sort().reverse();
+
+  const yr = new Date().getFullYear();
+  const inYr = ts => new Date(ts).getFullYear() === yr;
+  const yE = sum(S.entries.filter(e => inYr(e.ts) && e.type === 'income'), 'amount');
+  const yS = sum(S.entries.filter(e => inYr(e.ts) && e.type !== 'income'), 'amount');
+  const yM = sum(S.trips.filter(t => inYr(t.ts)), 'miles');
+  $('yearCard').innerHTML = `<div class="group"><h3>${yr} so far</h3>
+    <div class="stats">
+      <div class="stat"><div class="v inc">${fmt(yE)}</div><div class="l">earned</div></div>
+      <div class="stat"><div class="v exp">${fmt(yS)}</div><div class="l">spent</div></div>
+      <div class="stat"><div class="v">${miles1(yM)}</div><div class="l">miles</div></div>
+    </div>
+    <p class="hint">Estimated mileage deduction: <b>${fmt(yM * S.mileageRate)}</b> at ${fmt2(S.mileageRate)} a mile.</p></div>`;
+
+  $('monthCards').innerHTML = list.map(k => {
+    const d = monthData(k);
+    const isNow = k === nk;
+    const covered = d.left <= 0;
+    const pill = covered ? `<span class="pill ok">Covered</span>`
+      : isNow ? `<span class="pill go">${fmt(d.left)} to go</span>`
+      : `<span class="pill short">Short ${fmt(d.left)}</span>`;
+    const frac = d.need > 0 ? Math.min(d.earned / d.need, 1) : 1;
+
+    const inc = {}, exp = {};
+    d.entries.forEach(e => {
+      if(e.type === 'income') inc[e.category || 'Other'] = (inc[e.category || 'Other'] || 0) + e.amount;
+      else { const c = e.type === 'gas' ? 'Gas' : (e.category || 'Other'); exp[c] = (exp[c] || 0) + e.amount; }
+    });
+    const dd = inc['DoorDash'] || 0, gas = exp['Gas'] || 0;
+    let driving = '';
+    if(d.miles > 0){
+      driving = `<div class="bk"><h4>Driving</h4>
+        <div class="kv"><span>Miles</span><span>${miles1(d.miles)} mi</span></div>
+        <div class="kv"><span>Est. deduction</span><span>${fmt(d.miles * S.mileageRate)}</span></div>
+        ${dd > 0 ? `<div class="kv"><span>DoorDash pay per mile</span><span>${fmt2(dd / d.miles)}</span></div>
+        <div class="kv"><span>After gas</span><span>${fmt2((dd - gas) / d.miles)}</span></div>` : ''}</div>`;
+    }
+    const body = breakdown('Earned from', inc, 'teal') + breakdown('Spent on', exp, 'coral') + driving;
+    return `<div class="mcard ${openMonths.has(k) ? 'open' : ''}">
+      <button class="mhead" data-month="${k}">
+        <div><div class="mt">${esc(monthName(k))}</div><div class="ms">Earned ${fmt(d.earned)} · Spent ${fmt(d.spent)}</div></div>
+        ${pill}<span class="chev">${ic('down')}</span>
+      </button>
+      <div class="bar ${covered ? 'ok' : ''}"><span style="width:${(frac*100).toFixed(1)}%"></span></div>
+      <div class="mbody">${body || '<div class="empty" style="padding:16px 0 4px">Nothing logged this month.</div>'}
+        <button class="btn soft" data-goto="${k}">See all entries</button></div>
+    </div>`;
+  }).join('');
+}
+
+function renderSettings(){
+  $('expMonthLbl').textContent = 'Export ' + monthName(viewKey);
+  $('expYearLbl').textContent = 'Export all of ' + new Date().getFullYear();
+}
+
+/* ---------- add / edit entries ---------- */
+function show(id){ $(id).classList.add('show'); }
+function closeSheets(){
+  document.querySelectorAll('.overlay').forEach(o => o.classList.remove('show'));
+  document.activeElement && document.activeElement.blur && document.activeElement.blur();
+  editing = null;
+}
+function defaultDate(){
+  // Adding while looking at a past month files it under that month.
+  return viewKey === nowKey() ? dateStr(Date.now()) : (viewKey + '-' + pad(daysInMonth(viewKey)));
+}
+
+function openEntry(type, id){
+  const e = id ? S.entries.find(x => x.id === id) : null;
+  editing = e ? {kind:'e', id} : null;
+  eType = e ? e.type : type;
+  eCat = e ? e.category : null;
+  $('eTitle').textContent = e ? 'Edit entry' : 'Add an entry';
+  $('eAmt').value = e ? String(e.amount) : '';
+  $('eNote').value = e ? e.note : '';
+  $('eDate').value = e ? dateStr(e.ts) : defaultDate();
+  $('eDate').max = dateStr(Date.now());
+  $('eDel').hidden = !e;
+  setType(eType, !!e);
+  show('entrySheet');
+  if(!e) $('eAmt').focus({preventScroll:true});
+}
+function setType(t, keepCat){
+  if(t !== eType && !keepCat) eCat = null;
+  eType = t;
+  if(!keepCat && t === 'income' && !eCat) eCat = S.lastIncomeCat;
+  document.querySelectorAll('#typeSeg button').forEach(b => b.classList.toggle('on', b.dataset.type === t));
+  let cats = t === 'income' ? INCOME_CATS : t === 'purchase' ? EXPENSE_CATS : null;
+  if(!cats) eCat = null;
+  if(cats && eCat && !cats.includes(eCat)) cats = [...cats, eCat];
+  $('eCatWrap').hidden = !cats;
+  $('eChips').innerHTML = cats ? cats.map(c => `<button class="chip ${c === eCat ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('') : '';
+}
+function saveEntry(){
+  const amount = Math.round(parseFloat($('eAmt').value) * 100) / 100;
+  if(!(amount > 0)){ toast('Enter an amount first'); $('eAmt').focus(); return; }
+  const note = $('eNote').value.trim();
+  const category = eType === 'gas' ? null : eCat;
+  const before = monthData(nowKey()).left;
+  const wasEditing = !!editing;
+  let e;
+  if(editing){
+    e = S.entries.find(x => x.id === editing.id);
+    Object.assign(e, {type: eType, amount, category, note, ts: tsFromDate($('eDate').value, e.ts)});
+  } else {
+    e = {id: uid(), type: eType, amount, category, note, ts: tsFromDate($('eDate').value)};
+    S.entries.push(e);
+  }
+  if(eType === 'income' && category) S.lastIncomeCat = category;
+  save(); closeSheets(); renderAll();
+  const where = mk(e.ts) !== viewKey ? ' to ' + monthName(mk(e.ts)) : '';
+  if(wasEditing) toast('Changes saved' + (where ? ', moved' + where : ''));
+  else toast((eType === 'income' ? 'Added ' : 'Logged ') + fmt2(amount) + where);
+  if(before > 0 && monthData(nowKey()).left <= 0) celebrate();
+}
+
+/* ---------- trips ---------- */
+function setMode(m){
+  tMode = m;
+  document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  $('tTotalWrap').hidden = m !== 'total';
+  $('tOdoWrap').hidden = m !== 'odo';
+}
+function updOdo(){
+  const s = parseFloat($('tStart').value), e = parseFloat($('tEnd').value);
+  $('tOdoOut').textContent = isFinite(s) && isFinite(e) && e > s ? miles1(e - s) : '0';
+}
+function openTrip(id){
+  const t = id ? S.trips.find(x => x.id === id) : null;
+  editing = t ? {kind:'t', id} : null;
+  setMode(t && t.odoStart != null ? 'odo' : 'total');
+  $('tTitle').textContent = t ? 'Edit trip' : 'Log a trip';
+  $('tMiles').value = t ? String(t.miles) : '';
+  $('tStart').value = t ? (t.odoStart ?? '') : (S.lastOdometer ?? '');
+  $('tEnd').value = t ? (t.odoEnd ?? '') : '';
+  $('tNote').value = t ? t.note : '';
+  $('tDate').value = t ? dateStr(t.ts) : defaultDate();
+  $('tDate').max = dateStr(Date.now());
+  $('tDel').hidden = !t;
+  updOdo();
+  show('tripSheet');
+  if(!t) $('tMiles').focus({preventScroll:true});
+}
+function saveTrip(){
+  let miles, s = null, en = null;
+  if(tMode === 'total'){
+    miles = parseFloat($('tMiles').value);
+  } else {
+    s = parseFloat($('tStart').value); en = parseFloat($('tEnd').value);
+    if(!isFinite(s) || !isFinite(en)){ toast('Enter both odometer readings'); return; }
+    if(en <= s){ toast('End reading must be higher than start'); return; }
+    miles = en - s;
+  }
+  if(!(miles > 0)){ toast('Enter the miles you drove'); return; }
+  miles = Math.round(miles * 10) / 10;
+  const note = $('tNote').value.trim();
+  const wasEditing = !!editing;
+  let t;
+  if(editing){
+    t = S.trips.find(x => x.id === editing.id);
+    Object.assign(t, {miles, note, odoStart: s, odoEnd: en, ts: tsFromDate($('tDate').value, t.ts)});
+  } else {
+    t = {id: uid(), miles, note, odoStart: s, odoEnd: en, ts: tsFromDate($('tDate').value)};
+    S.trips.push(t);
+  }
+  if(en != null && (S.lastOdometer == null || en > S.lastOdometer)) S.lastOdometer = en;
+  save(); closeSheets(); renderAll();
+  toast(wasEditing ? 'Trip updated' : 'Logged ' + miles1(miles) + ' miles');
+}
+
+/* ---------- delete with undo ---------- */
+function deleteItem(kind){
+  if(!editing) return;
+  const arr = kind === 'e' ? S.entries : S.trips;
+  const idx = arr.findIndex(x => x.id === editing.id);
+  if(idx < 0) return;
+  const [item] = arr.splice(idx, 1);
+  save(); closeSheets(); renderAll();
+  toast(kind === 'e' ? 'Entry deleted' : 'Trip deleted', () => {
+    arr.splice(Math.min(idx, arr.length), 0, item);
+    save(); renderAll(); toast('Restored');
+  });
+}
+
+/* ---------- settings ---------- */
+function saveSettings(){
+  const g = parseFloat($('goalIn').value), r = parseFloat($('rateIn').value);
+  if(isFinite(g) && g >= 0){ S.goal = g; S.monthGoals[nowKey()] = g; }
+  if(isFinite(r) && r > 0) S.mileageRate = r;
+  save(); renderAll(); toast('Settings saved');
+}
+function exportCSV(scope){
+  const yr = new Date().getFullYear();
+  const inScope = ts => scope === 'month' ? mk(ts) === viewKey : new Date(ts).getFullYear() === yr;
+  const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
+  const rows = [
+    ...S.entries.filter(e => inScope(e.ts)).map(e => ({ts:e.ts, cells:[TYPES[e.type].label, e.category || '', e.note, (e.type === 'income' ? e.amount : -e.amount).toFixed(2), '']})),
+    ...S.trips.filter(t => inScope(t.ts)).map(t => ({ts:t.ts, cells:['Miles', '', t.note, '', t.miles.toFixed(1)]}))
+  ].sort((a,b) => a.ts - b.ts);
+  if(!rows.length){ toast('Nothing to export yet'); return; }
+  const lines = [['Date','Time','Type','Category','Note','Amount','Miles'].join(',')]
+    .concat(rows.map(r => [dateStr(r.ts), timeStr(r.ts), ...r.cells].map(q).join(',')));
+  const name = 'payoff-tracker-' + (scope === 'month' ? viewKey : yr) + '.csv';
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('Exported ' + name);
+}
+
+/* ---------- feedback ---------- */
+let toastTimer;
+function toast(msg, undo){
+  const t = $('toast'), b = $('toastUndo');
+  $('toastMsg').textContent = msg;
+  b.hidden = !undo;
+  t.classList.toggle('has-undo', !!undo);
+  b.onclick = undo ? () => { t.classList.remove('show'); undo(); } : null;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), undo ? 5000 : 2200);
+}
+function celebrate(){
+  const colors = ['var(--amber)','var(--teal)','var(--coral)','#8FA4FF'];
+  for(let i = 0; i < 36; i++){
+    const el = document.createElement('div');
+    el.className = 'confetti';
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.background = colors[i % colors.length];
+    el.style.animationDuration = (1.8 + Math.random() * 1.6) + 's';
+    el.style.animationDelay = (Math.random() * .3) + 's';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  }
+  setTimeout(() => toast("You've covered this month's bills 🎉"), 400);
+}
+
+/* ---------- wiring ---------- */
+document.addEventListener('click', ev => {
+  const r = ev.target.closest('[data-edit]');
+  if(r){ const [k, id] = r.dataset.edit.split(':'); k === 'e' ? openEntry(null, id) : openTrip(id); return; }
+  const c = ev.target.closest('[data-cat]');
+  if(c){ eCat = eCat === c.dataset.cat ? null : c.dataset.cat; setType(eType, true); return; }
+  const m = ev.target.closest('[data-month]');
+  if(m){ const k = m.dataset.month; openMonths.has(k) ? openMonths.delete(k) : openMonths.add(k); renderMonths(); return; }
+  const g = ev.target.closest('[data-goto]');
+  if(g){ viewKey = g.dataset.goto; switchTab('home'); return; }
+  if(ev.target.classList.contains('overlay')) closeSheets();
+});
+document.addEventListener('keydown', ev => {
+  if(ev.key === 'Escape') closeSheets();
+  if(ev.key === 'Enter' && ev.target.matches('.overlay input:not([type=date])')){
+    ev.preventDefault();
+    $('entrySheet').classList.contains('show') ? saveEntry() : saveTrip();
+  }
+});
+['eAmt','tMiles','tStart','tEnd','goalIn','rateIn'].forEach(id => $(id).addEventListener('input', ev => cleanNum(ev.target)));
+// When the app comes back after midnight or a new month, move to the new month.
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState !== 'visible') return;
+  const k = nowKey();
+  if(k !== lastNowKey){
+    if(viewKey === lastNowKey) viewKey = k;
+    if(S.monthGoals[k] == null){ S.monthGoals[k] = S.goal; save(); }
+    lastNowKey = k;
+  }
+  renderAll();
+});
+
+document.querySelectorAll('[data-ic]').forEach(el => { el.outerHTML = ic(el.dataset.ic); });
+load();
+openMonths.add(nowKey());
+applyTheme();
+renderAll();
+</script>
+</body>
+</html>

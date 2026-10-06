@@ -1,0 +1,8 @@
+# Your exported data and backups stay out of save points
+*.csv
+*backup*.json
+
+# System junk
+Thumbs.db
+desktop.ini
+.DS_Store
