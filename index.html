@@ -28,6 +28,11 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 html{background:var(--bg)}
+/* Only #scroller scrolls; the page itself never does. Stops the iPhone
+   home-screen bug where the bottom bar drifts after switching tabs. */
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+#scroller{position:fixed;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;scrollbar-width:none}
+#scroller::-webkit-scrollbar{display:none}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.4;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
 /* App feel: no double-tap zoom, no text selection or press-and-hold menus on buttons */
@@ -168,7 +173,9 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .kv span:first-child{color:var(--muted)}
 .mbody .btn{margin-top:12px}
 
-.nextbill{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:12px 14px;border-radius:18px;background:var(--amber-soft);border:1px solid rgba(255,178,56,.3);color:var(--amber)}
+.nextbill{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:12px 14px;border-radius:18px;background:var(--surface);border:1px solid var(--line);color:var(--muted)}
+.nextbill:not(.soon):not(.late):not(.done) button{color:var(--text);border-color:var(--line-2)}
+.nextbill.soon{background:var(--amber-soft);border-color:rgba(255,178,56,.3);color:var(--amber)}
 .nextbill.late{background:var(--coral-soft);border-color:rgba(255,122,123,.35);color:var(--coral)}
 .nextbill.done{background:var(--teal-soft);border-color:rgba(76,217,176,.3);color:var(--teal)}
 .nx-l{font-size:12px;font-weight:600}
@@ -214,6 +221,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 </style>
 </head>
 <body>
+<div id="scroller">
 <div id="app">
   <header class="top">
     <div class="mnav" id="mnav">
@@ -320,6 +328,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
     </div>
     <input type="file" id="fileIn" accept=".json,.csv,application/json,text/csv,text/plain" hidden>
   </section>
+</div>
 </div>
 
 <nav class="nav"><div class="nav-in">
@@ -576,7 +585,7 @@ function switchTab(t){
   document.querySelectorAll('.nb').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
   if(t === 'settings'){ $('goalIn').value = goalFor(nowKey()); $('rateIn').value = S.mileageRate; }
   renderAll();
-  window.scrollTo(0, 0);
+  $('scroller').scrollTop = 0;
 }
 function shiftMonth(n){
   const k = addMonths(viewKey, n);
@@ -860,7 +869,7 @@ function renderNextBill(isNow){
   const forTxt = x.b.nextMonth ? 'For ' + monthName(x.k).split(' ')[0] + ' · ' : '';
   const head = !open.length ? `All caught up · next bill`
     : (i.late ? 'Overdue bill' : 'Next bill') + (open.length > 1 ? ` · ${open.length - 1} more unpaid` : '');
-  el.innerHTML = `<div class="nextbill ${!open.length ? 'done' : i.late ? 'late' : ''}"><div style="min-width:0">
+  el.innerHTML = `<div class="nextbill ${!open.length ? 'done' : i.late ? 'late' : i.cls === 'due-soon' ? 'soon' : ''}"><div style="min-width:0">
     <div class="nx-l">${head}</div>
     <div class="nx-t">${esc(x.b.name)} · ${fmt2(x.b.amount)}</div>
     <div class="nx-l">${esc(forTxt + i.text)}</div></div>
