@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0F1328">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -30,6 +30,9 @@
 html{background:var(--bg)}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.4;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
+/* App feel: no double-tap zoom, no text selection or press-and-hold menus on buttons */
+html{touch-action:manipulation}
+button,.nav,.check{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 input{font:inherit;color:inherit}
 svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .invisible{visibility:hidden}
@@ -179,6 +182,9 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .check{width:30px;height:30px;border-radius:50%;border:2px solid var(--line-2);display:grid;place-items:center;flex-shrink:0;color:transparent;transition:background .15s,border-color .15s}
 .check svg{width:17px;height:17px;stroke-width:2.6}
 .check.on{background:var(--teal);border-color:var(--teal);color:var(--bg)}
+.check.auto{border-style:dashed;color:var(--muted)}
+.check.auto svg{stroke-width:2}
+.check.auto.on{border-style:solid;color:var(--bg)}
 .due-late{color:var(--coral)} .due-soon{color:var(--amber)} .due-paid{color:var(--teal)}
 .nag{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line-2);border-radius:16px;padding:12px 12px 12px 14px;margin-bottom:12px;font-size:13.5px;color:var(--muted)}
 .nag .txt{flex:1 1 170px}
@@ -392,6 +398,12 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
       <button data-bnext="1" onclick="setBillNext(true)">Following month</button>
     </div>
     <p class="hint" id="bHint" style="margin:0 2px 14px"></p>
+    <div class="flabel">How is it paid?</div>
+    <div class="seg" style="margin-bottom:6px">
+      <button data-bauto="0" onclick="setBillAuto(false)">I pay it myself</button>
+      <button data-bauto="1" onclick="setBillAuto(true)">Autopay</button>
+    </div>
+    <p class="hint" style="margin:0 2px 14px">Autopay bills check themselves off on their due date.</p>
     <div class="actions">
       <button class="btn soft" onclick="closeSheets()">Cancel</button>
       <button class="btn primary" onclick="saveBill()">Save</button>
@@ -431,7 +443,8 @@ const ICONS = {
   download:'<path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>',
   upload:'<path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/>',
   receipt:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
-  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>'
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  auto:'<path d="M19.5 11A7.5 7.5 0 0 0 6 6.5"/><path d="M5 3.5v3.5h3.5"/><path d="M4.5 13A7.5 7.5 0 0 0 18 17.5"/><path d="M19 20.5V17h-3.5"/>'
 };
 const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
 const $ = id => document.getElementById(id);
@@ -441,7 +454,7 @@ let viewKey = null;    // month being viewed, "YYYY-MM"
 let tab = 'home';
 let lastNowKey = null;
 let editing = null;    // {kind:'e'|'t', id} while editing an existing item
-let eType = 'income', eCat = null, tMode = 'total', bNext = false;
+let eType = 'income', eCat = null, tMode = 'total', bNext = false, bAuto = false;
 const openMonths = new Set();
 
 /* ---------- helpers ---------- */
@@ -502,7 +515,7 @@ function normalize(d){
   s.bills = (Array.isArray(s.bills) ? s.bills : [])
     .filter(b => b && b.name && isFinite(b.amount))
     .map(b => ({id: b.id || uid(), name: String(b.name), amount: +b.amount,
-                dueDay: Math.min(Math.max(parseInt(b.dueDay) || 1, 1), 31), nextMonth: !!b.nextMonth}));
+                dueDay: Math.min(Math.max(parseInt(b.dueDay) || 1, 1), 31), nextMonth: !!b.nextMonth, autopay: !!b.autopay}));
   if(!s.monthGoals || typeof s.monthGoals !== 'object') s.monthGoals = {};
   if(!s.paid || typeof s.paid !== 'object') s.paid = {};
   delete s.theme;
@@ -789,6 +802,10 @@ function billInfo(b, k){
   const due = dueDate(b, k), dueTxt = shortDay(due);
   if(isPaid(k, b.id)) return {paid:true, cls:'due-paid', text:'Paid ' + shortDay(new Date(S.paid[k][b.id]))};
   const days = Math.round((due - startOfToday()) / 864e5);
+  // Autopay bills count as paid once their due date arrives.
+  if(b.autopay) return days <= 0
+    ? {paid:true, auto:true, cls:'due-paid', text:'Paid automatically ' + dueTxt}
+    : {auto:true, cls:'', text:`Autopay ${dueTxt} · in ${days} day${days === 1 ? '' : 's'}`};
   const stillOpen = k === nowKey() || (b.nextMonth && k === addMonths(nowKey(), -1));
   if(days < 0 && !stillOpen) return {late:true, cls:'due-late', text:'Not marked paid · was due ' + dueTxt};
   if(days < 0) return {late:true, cls:'due-late', text:`Overdue ${-days} day${days === -1 ? '' : 's'} · was due ${dueTxt}`};
@@ -804,7 +821,7 @@ function renderBills(){
     return;
   }
   const list = sortedBills(k), total = billsTotal();
-  const paidList = list.filter(b => isPaid(k, b.id));
+  const paidList = list.filter(b => billInfo(b, k).paid);
   const paidAmt = sum(paidList, 'amount');
   const all = paidList.length === list.length;
   $('billSummary').innerHTML = `<div class="group">
@@ -817,19 +834,23 @@ function renderBills(){
   $('billList').innerHTML = '<div class="list">' + list.map(b => {
     const i = billInfo(b, k);
     return `<div class="brow ${i.paid ? 'paid' : ''}">
-      <button class="check ${i.paid ? 'on' : ''}" data-paid="${b.id}" aria-label="${i.paid ? 'Mark ' + esc(b.name) + ' unpaid' : 'Mark ' + esc(b.name) + ' paid'}">${ic('check')}</button>
+      ${i.auto && !isPaid(k, b.id)
+        ? `<span class="check auto ${i.paid ? 'on' : ''}" title="Autopay">${ic(i.paid ? 'check' : 'auto')}</span>`
+        : `<button class="check ${i.paid ? 'on' : ''}" data-paid="${b.id}" aria-label="${i.paid ? 'Mark ' + esc(b.name) + ' unpaid' : 'Mark ' + esc(b.name) + ' paid'}">${ic('check')}</button>`}
       <button class="row" data-edit="b:${b.id}"><span class="rt"><span class="r1">${esc(b.name)}</span><span class="r2 ${i.cls}">${esc(i.text)}</span></span><span class="amt">${fmt2(b.amount)}</span></button>
     </div>`;
   }).join('') + '</div>';
 }
 function renderNextBill(isNow){
   const el = $('nextBill');
-  if(!isNow || !S.bills.length){ el.innerHTML = ''; return; }
+  const manual = S.bills.filter(b => !b.autopay);
+  if(!isNow || !manual.length){ el.innerHTML = ''; return; }
   const k = nowKey(), prev = addMonths(k, -1), next = addMonths(k, 1);
   // Each bill's oldest unpaid month (last month counts only for
   // "following month" bills, since those come due this month).
+  // Autopay bills take care of themselves, so they're left out.
   const up = [];
-  S.bills.forEach(b => {
+  manual.forEach(b => {
     const fk = [b.nextMonth ? prev : null, k, next].find(x => x && !isPaid(x, b.id)) || addMonths(k, 2);
     up.push({b, k: fk, due: dueDate(b, fk)});
   });
@@ -848,6 +869,7 @@ function renderNextBill(isNow){
 // After adding or changing a bill, ask about a due date that already passed
 // this month (or last month's, for "following month" bills).
 function askAlreadyPaid(b){
+  if(b.autopay) return;
   const k = nowKey(), today = startOfToday();
   const fk = [k, b.nextMonth ? addMonths(k, -1) : null]
     .find(x => x && dueDate(b, x) < today && !isPaid(x, b.id));
@@ -880,6 +902,7 @@ function openBill(id){
   $('bDay').value = b ? String(b.dueDay) : '';
   $('bDel').hidden = !b;
   setBillNext(b ? b.nextMonth : S.lastBillNext);
+  setBillAuto(b ? b.autopay : false);
   show('billSheet');
   if(!b) $('bName').focus({preventScroll:true});
 }
@@ -892,8 +915,8 @@ function saveBill(){
   if(!(day >= 1 && day <= 31)){ toast('Due day should be 1 to 31'); $('bDay').focus(); return; }
   const wasEditing = !!editing;
   let b;
-  if(editing){ b = S.bills.find(x => x.id === editing.id); Object.assign(b, {name, amount, dueDay: day, nextMonth: bNext}); }
-  else { b = {id: uid(), name, amount, dueDay: day, nextMonth: bNext}; S.bills.push(b); }
+  if(editing){ b = S.bills.find(x => x.id === editing.id); Object.assign(b, {name, amount, dueDay: day, nextMonth: bNext, autopay: bAuto}); }
+  else { b = {id: uid(), name, amount, dueDay: day, nextMonth: bNext, autopay: bAuto}; S.bills.push(b); }
   S.lastBillNext = bNext;
   closeSheets();
   askAlreadyPaid(b);
@@ -905,6 +928,10 @@ function setBillNext(v){
   bNext = !!v;
   document.querySelectorAll('[data-bnext]').forEach(x => x.classList.toggle('on', x.dataset.bnext === (bNext ? '1' : '0')));
   updBillHint();
+}
+function setBillAuto(v){
+  bAuto = !!v;
+  document.querySelectorAll('[data-bauto]').forEach(x => x.classList.toggle('on', x.dataset.bauto === (bAuto ? '1' : '0')));
 }
 function updBillHint(){
   const day = parseInt($('bDay').value, 10) || 1;
@@ -1281,6 +1308,10 @@ document.addEventListener('visibilitychange', () => {
   }
   renderAll();
 });
+
+// iPhones ignore the "no zoom" setting in some cases, so also block pinch gestures.
+['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, ev => ev.preventDefault(), {passive: false}));
+document.addEventListener('touchmove', ev => { if(ev.touches.length > 1) ev.preventDefault(); }, {passive: false});
 
 document.querySelectorAll('[data-ic]').forEach(el => { el.outerHTML = ic(el.dataset.ic); });
 load();
