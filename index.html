@@ -385,7 +385,13 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
     <div class="flabel">Amount each month</div>
     <div class="money"><span>$</span><input id="bAmt" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
     <div class="flabel">Due on day of the month</div>
-    <input class="inp" id="bDay" inputmode="numeric" placeholder="15" autocomplete="off">
+    <input class="inp" id="bDay" inputmode="numeric" placeholder="15" autocomplete="off" oninput="updBillHint()">
+    <div class="flabel">When do you pay each month's bill?</div>
+    <div class="seg" style="margin-bottom:6px">
+      <button data-bnext="0" onclick="setBillNext(false)">Same month</button>
+      <button data-bnext="1" onclick="setBillNext(true)">Following month</button>
+    </div>
+    <p class="hint" id="bHint" style="margin:0 2px 14px"></p>
     <div class="actions">
       <button class="btn soft" onclick="closeSheets()">Cancel</button>
       <button class="btn primary" onclick="saveBill()">Save</button>
@@ -435,7 +441,7 @@ let viewKey = null;    // month being viewed, "YYYY-MM"
 let tab = 'home';
 let lastNowKey = null;
 let editing = null;    // {kind:'e'|'t', id} while editing an existing item
-let eType = 'income', eCat = null, tMode = 'total';
+let eType = 'income', eCat = null, tMode = 'total', bNext = false;
 const openMonths = new Set();
 
 /* ---------- helpers ---------- */
@@ -480,7 +486,7 @@ function cleanNum(el){
 /* ---------- saving and loading ---------- */
 function defaults(){
   return {version:1, entries:[], trips:[], bills:[], paid:{}, goal:660, monthGoals:{}, mileageRate:0.70,
-          lastOdometer:null, lastIncomeCat:'DoorDash', lastBackup:null, backupSnooze:null};
+          lastOdometer:null, lastIncomeCat:'DoorDash', lastBackup:null, backupSnooze:null, lastBillNext:false};
 }
 function normalize(d){
   const s = {...defaults(), ...d};
@@ -496,7 +502,7 @@ function normalize(d){
   s.bills = (Array.isArray(s.bills) ? s.bills : [])
     .filter(b => b && b.name && isFinite(b.amount))
     .map(b => ({id: b.id || uid(), name: String(b.name), amount: +b.amount,
-                dueDay: Math.min(Math.max(parseInt(b.dueDay) || 1, 1), 31)}));
+                dueDay: Math.min(Math.max(parseInt(b.dueDay) || 1, 1), 31), nextMonth: !!b.nextMonth}));
   if(!s.monthGoals || typeof s.monthGoals !== 'object') s.monthGoals = {};
   if(!s.paid || typeof s.paid !== 'object') s.paid = {};
   delete s.theme;
@@ -762,8 +768,17 @@ function renderSettings(){
 
 /* ---------- bills ---------- */
 const billsTotal = () => sum(S.bills, 'amount');
-const sortedBills = () => [...S.bills].sort((a,b) => a.dueDay - b.dueDay || a.name.localeCompare(b.name));
+const sortedBills = k => [...S.bills].sort((a,b) => dueDate(a, k) - dueDate(b, k) || a.name.localeCompare(b.name));
 const isPaid = (k, id) => !!(S.paid[k] && S.paid[k][id]);
+const shortDay = d => d.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+const startOfToday = () => { const t = new Date(); t.setHours(0,0,0,0); return t; };
+// When month k's bill is due. "Following month" bills (b.nextMonth) are
+// paid after the month they cover: October's is due in November.
+function dueDate(b, k){
+  const dk = b.nextMonth ? addMonths(k, 1) : k;
+  const {y,m} = keyParts(dk);
+  return new Date(y, m-1, Math.min(b.dueDay, daysInMonth(dk)));
+}
 // With bills listed, the monthly goal is their total (this month and later).
 function syncGoal(){
   if(!S.bills.length) return;
@@ -771,13 +786,11 @@ function syncGoal(){
   S.monthGoals[nowKey()] = S.goal;
 }
 function billInfo(b, k){
-  const {y,m} = keyParts(k);
-  const due = new Date(y, m-1, Math.min(b.dueDay, daysInMonth(k)));
-  const dueTxt = due.toLocaleDateString(undefined, {month:'short', day:'numeric'});
-  if(isPaid(k, b.id)) return {paid:true, cls:'due-paid', text:'Paid ' + new Date(S.paid[k][b.id]).toLocaleDateString(undefined, {month:'short', day:'numeric'})};
-  if(k < nowKey()) return {late:true, cls:'due-late', text:'Not marked paid · was due ' + dueTxt};
-  const today = new Date(); today.setHours(0,0,0,0);
-  const days = Math.round((due - today) / 864e5);
+  const due = dueDate(b, k), dueTxt = shortDay(due);
+  if(isPaid(k, b.id)) return {paid:true, cls:'due-paid', text:'Paid ' + shortDay(new Date(S.paid[k][b.id]))};
+  const days = Math.round((due - startOfToday()) / 864e5);
+  const stillOpen = k === nowKey() || (b.nextMonth && k === addMonths(nowKey(), -1));
+  if(days < 0 && !stillOpen) return {late:true, cls:'due-late', text:'Not marked paid · was due ' + dueTxt};
   if(days < 0) return {late:true, cls:'due-late', text:`Overdue ${-days} day${days === -1 ? '' : 's'} · was due ${dueTxt}`};
   if(days === 0) return {cls:'due-soon', text:'Due today'};
   if(days === 1) return {cls:'due-soon', text:'Due tomorrow'};
@@ -790,7 +803,7 @@ function renderBills(){
     $('billList').innerHTML = `<div class="empty">Add each bill you pay every month, like rent, phone or car insurance. Your monthly goal will add itself up from this list, and you can check bills off as you pay them.</div>`;
     return;
   }
-  const list = sortedBills(), total = billsTotal();
+  const list = sortedBills(k), total = billsTotal();
   const paidList = list.filter(b => isPaid(k, b.id));
   const paidAmt = sum(paidList, 'amount');
   const all = paidList.length === list.length;
@@ -812,19 +825,38 @@ function renderBills(){
 function renderNextBill(isNow){
   const el = $('nextBill');
   if(!isNow || !S.bills.length){ el.innerHTML = ''; return; }
-  const k = nowKey();
-  const unpaid = sortedBills().filter(b => !isPaid(k, b.id));
-  if(!unpaid.length){
-    el.innerHTML = `<div class="nextbill done"><div><div class="nx-l">Bills</div><div class="nx-t">All ${S.bills.length} bills paid this month</div></div>${ic('check')}</div>`;
-    return;
+  const k = nowKey(), prev = addMonths(k, -1), next = addMonths(k, 1);
+  // Each bill's oldest unpaid month (last month counts only for
+  // "following month" bills, since those come due this month).
+  const up = [];
+  S.bills.forEach(b => {
+    const fk = [b.nextMonth ? prev : null, k, next].find(x => x && !isPaid(x, b.id)) || addMonths(k, 2);
+    up.push({b, k: fk, due: dueDate(b, fk)});
+  });
+  up.sort((a,c) => a.due - c.due);
+  const open = up.filter(x => x.k <= k);
+  const x = up[0], i = billInfo(x.b, x.k);
+  const forTxt = x.b.nextMonth ? 'For ' + monthName(x.k).split(' ')[0] + ' · ' : '';
+  const head = !open.length ? `All caught up · next bill`
+    : (i.late ? 'Overdue bill' : 'Next bill') + (open.length > 1 ? ` · ${open.length - 1} more unpaid` : '');
+  el.innerHTML = `<div class="nextbill ${!open.length ? 'done' : i.late ? 'late' : ''}"><div style="min-width:0">
+    <div class="nx-l">${head}</div>
+    <div class="nx-t">${esc(x.b.name)} · ${fmt2(x.b.amount)}</div>
+    <div class="nx-l">${esc(forTxt + i.text)}</div></div>
+    ${open.length ? `<button data-paid-now="${x.b.id}|${x.k}">Mark paid</button>` : ''}</div>`;
+}
+// After adding or changing a bill, ask about a due date that already passed
+// this month (or last month's, for "following month" bills).
+function askAlreadyPaid(b){
+  const k = nowKey(), today = startOfToday();
+  const fk = [k, b.nextMonth ? addMonths(k, -1) : null]
+    .find(x => x && dueDate(b, x) < today && !isPaid(x, b.id));
+  if(!fk) return;
+  const due = dueDate(b, fk);
+  if(confirm(`Have you already paid ${b.name} for ${monthName(fk).split(' ')[0]}? It was due ${shortDay(due)}.`)){
+    S.paid[fk] = S.paid[fk] || {};
+    S.paid[fk][b.id] = due.getTime();
   }
-  const b = unpaid[0], i = billInfo(b, k);
-  const more = unpaid.length > 1 ? ` · ${unpaid.length - 1} more unpaid` : '';
-  el.innerHTML = `<div class="nextbill ${i.late ? 'late' : ''}"><div style="min-width:0">
-    <div class="nx-l">${i.late ? 'Overdue bill' : 'Next bill'}${more}</div>
-    <div class="nx-t">${esc(b.name)} · ${fmt2(b.amount)}</div>
-    <div class="nx-l">${esc(i.text)}</div></div>
-    <button data-paid-now="${b.id}">Mark paid</button></div>`;
 }
 function togglePaid(id, k){
   const b = S.bills.find(x => x.id === id);
@@ -847,6 +879,7 @@ function openBill(id){
   $('bAmt').value = b ? String(b.amount) : '';
   $('bDay').value = b ? String(b.dueDay) : '';
   $('bDel').hidden = !b;
+  setBillNext(b ? b.nextMonth : S.lastBillNext);
   show('billSheet');
   if(!b) $('bName').focus({preventScroll:true});
 }
@@ -858,10 +891,25 @@ function saveBill(){
   if(!(amount > 0)){ toast('Enter the amount'); $('bAmt').focus(); return; }
   if(!(day >= 1 && day <= 31)){ toast('Due day should be 1 to 31'); $('bDay').focus(); return; }
   const wasEditing = !!editing;
-  if(editing) Object.assign(S.bills.find(x => x.id === editing.id), {name, amount, dueDay: day});
-  else S.bills.push({id: uid(), name, amount, dueDay: day});
-  syncGoal(); save(); closeSheets(); renderAll();
+  let b;
+  if(editing){ b = S.bills.find(x => x.id === editing.id); Object.assign(b, {name, amount, dueDay: day, nextMonth: bNext}); }
+  else { b = {id: uid(), name, amount, dueDay: day, nextMonth: bNext}; S.bills.push(b); }
+  S.lastBillNext = bNext;
+  closeSheets();
+  askAlreadyPaid(b);
+  syncGoal(); save(); renderAll();
   toast((wasEditing ? 'Bill updated' : 'Bill added') + ' · goal is now ' + fmt2(S.goal));
+}
+
+function setBillNext(v){
+  bNext = !!v;
+  document.querySelectorAll('[data-bnext]').forEach(x => x.classList.toggle('on', x.dataset.bnext === (bNext ? '1' : '0')));
+  updBillHint();
+}
+function updBillHint(){
+  const day = parseInt($('bDay').value, 10) || 1;
+  const k = nowKey(), mon = monthName(k).split(' ')[0];
+  $('bHint').textContent = `${mon}'s bill is due ${shortDay(dueDate({dueDay: Math.min(Math.max(day, 1), 31), nextMonth: bNext}, k))}.`;
 }
 
 /* ---------- backup, restore and import ---------- */
@@ -1204,7 +1252,7 @@ document.addEventListener('click', ev => {
   const p = ev.target.closest('[data-paid]');
   if(p){ togglePaid(p.dataset.paid, viewKey); return; }
   const pn = ev.target.closest('[data-paid-now]');
-  if(pn){ togglePaid(pn.dataset.paidNow, nowKey()); return; }
+  if(pn){ const [id, k] = pn.dataset.paidNow.split('|'); togglePaid(id, k); return; }
   const c = ev.target.closest('[data-cat]');
   if(c){ eCat = eCat === c.dataset.cat ? null : c.dataset.cat; setType(eType, true); return; }
   const m = ev.target.closest('[data-month]');
