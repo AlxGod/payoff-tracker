@@ -22,16 +22,6 @@
   --num:ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",sans-serif;
   color-scheme:dark;
 }
-:root[data-theme="light"]{
-  --bg:#F3F4F9; --surface:#FFFFFF; --surface-2:#ECEEF6;
-  --line:rgba(21,26,51,.08); --line-2:rgba(21,26,51,.16);
-  --text:#151A33; --muted:#5F6790; --faint:#8C93B3;
-  --amber:#C97400; --on-amber:#FFFFFF; --amber-soft:rgba(220,127,0,.12);
-  --teal:#0A9672; --teal-soft:rgba(14,163,126,.12);
-  --coral:#D63F44; --coral-soft:rgba(225,76,80,.11);
-  --nav:rgba(255,255,255,.88); --scrim:rgba(14,18,40,.4); --lift:0 1px 3px rgba(21,26,51,.14);
-  color-scheme:light;
-}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 html{background:var(--bg)}
@@ -172,6 +162,29 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .kv span:first-child{color:var(--muted)}
 .mbody .btn{margin-top:12px}
 
+.nextbill{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:12px 14px;border-radius:18px;background:var(--amber-soft);border:1px solid rgba(255,178,56,.3);color:var(--amber)}
+.nextbill.late{background:var(--coral-soft);border-color:rgba(255,122,123,.35);color:var(--coral)}
+.nextbill.done{background:var(--teal-soft);border-color:rgba(76,217,176,.3);color:var(--teal)}
+.nx-l{font-size:12px;font-weight:600}
+.nx-t{font-size:15px;font-weight:700;color:var(--text);margin:1px 0}
+.nextbill button{font-size:13px;font-weight:700;padding:9px 12px;border-radius:11px;border:1px solid currentColor;white-space:nowrap}
+.brow{display:flex;align-items:center;gap:12px;padding:4px 4px 4px 14px}
+.brow+.brow{border-top:1px solid var(--line)}
+.brow .row{padding:9px 10px 9px 0;flex:1;min-width:0}
+.brow .row:active{background:none;opacity:.7}
+.brow.paid .r1{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--faint)}
+.check{width:30px;height:30px;border-radius:50%;border:2px solid var(--line-2);display:grid;place-items:center;flex-shrink:0;color:transparent;transition:background .15s,border-color .15s}
+.check svg{width:17px;height:17px;stroke-width:2.6}
+.check.on{background:var(--teal);border-color:var(--teal);color:var(--bg)}
+.due-late{color:var(--coral)} .due-soon{color:var(--amber)} .due-paid{color:var(--teal)}
+.nag{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line-2);border-radius:16px;padding:12px 12px 12px 14px;margin-bottom:12px;font-size:13.5px;color:var(--muted)}
+.nag .txt{flex:1 1 170px}
+.nag b{color:var(--text);display:block;font-size:14.5px}
+.nag-btns{display:flex;gap:4px;margin-left:auto}
+.nag button{font-weight:700;font-size:13px;padding:9px 13px;border-radius:10px}
+.nag .go{background:var(--amber);color:var(--on-amber)}
+.nag .later{color:var(--muted)}
+
 .group{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:16px;margin-bottom:14px}
 .group h3{margin:0 0 12px;font-size:15.5px;font-weight:700}
 .group .stats{margin:0}
@@ -182,7 +195,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .hint b{color:var(--text)}
 .stack>*+*{margin-top:10px}
 
-.toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom));transform:translate(-50%,16px);opacity:0;z-index:80;background:var(--text);color:var(--bg);border-radius:14px;padding:12px 16px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:14px;transition:opacity .22s ease,transform .22s ease;max-width:calc(100% - 32px);pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom));transform:translate(-50%,16px);opacity:0;z-index:80;background:var(--text);color:var(--bg);border-radius:14px;padding:12px 16px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:14px;transition:opacity .22s ease,transform .22s ease;width:max-content;max-width:calc(100% - 32px);pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .toast.has-undo{padding:8px 8px 8px 16px}
 .toast button{background:var(--amber);color:var(--on-amber);padding:7px 13px;border-radius:9px;font-weight:700;font-size:13.5px}
@@ -206,6 +219,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
   <!-- HOME -->
   <section class="screen active" id="s-home">
     <div class="viewing" id="viewH" hidden><span>Looking back at a past month</span><button onclick="goNow()">Back to now</button></div>
+    <div id="nag"></div>
     <div class="card ring-card">
       <div class="ring">
         <svg viewBox="0 0 200 200"><circle class="trk" cx="100" cy="100" r="86"/><circle class="fil" id="ringFill" cx="100" cy="100" r="86"/></svg>
@@ -214,6 +228,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
       <div class="pace" id="pace"></div>
       <div class="today" id="today"></div>
     </div>
+    <div id="nextBill"></div>
     <div class="stats">
       <div class="stat"><div class="v inc" id="hEarned"></div><div class="l">earned</div></div>
       <div class="stat"><div class="v exp" id="hSpent"></div><div class="l">spent</div></div>
@@ -226,6 +241,14 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
       <button class="qbtn" onclick="openTrip()"><span class="qi mi"><i data-ic="road"></i></span>Miles</button>
     </div>
     <div id="homeList"></div>
+  </section>
+
+  <!-- BILLS -->
+  <section class="screen" id="s-bills">
+    <div class="viewing" id="viewB" hidden><span>Looking back at a past month</span><button onclick="goNow()">Back to now</button></div>
+    <div id="billSummary"></div>
+    <div id="billList"></div>
+    <button class="btn primary" style="margin-top:14px" onclick="openBill()"><i data-ic="plus"></i>Add a bill</button>
   </section>
 
   <!-- MONTHS -->
@@ -250,28 +273,33 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
   <!-- SETTINGS -->
   <section class="screen" id="s-settings">
     <div class="group">
-      <h3>Appearance</h3>
-      <div class="seg" id="themeSeg" style="margin:0">
-        <button data-theme-btn="auto" onclick="setTheme('auto')">Match phone</button>
-        <button data-theme-btn="dark" onclick="setTheme('dark')">Dark</button>
-        <button data-theme-btn="light" onclick="setTheme('light')">Light</button>
-      </div>
-    </div>
-    <div class="group">
       <h3>Your numbers</h3>
-      <div class="field">
+      <div class="field" id="goalField">
         <label for="goalIn">Monthly bills to cover ($)</label>
         <input class="inp" id="goalIn" inputmode="decimal" placeholder="660">
       </div>
+      <p class="hint" id="goalFromBills" style="margin:0 2px 16px"></p>
       <div class="field">
         <label for="rateIn">Mileage deduction rate ($ per mile)</label>
         <input class="inp" id="rateIn" inputmode="decimal" placeholder="0.70">
       </div>
       <button class="btn primary" onclick="saveSettings()">Save</button>
-      <p class="hint">A new bills total applies to this month and future months. Past months keep the total they had.</p>
+      <p class="hint">A new goal applies to this month and future months. Past months keep the goal they had. The IRS sets a new mileage rate every January.</p>
     </div>
     <div class="group stack">
-      <h3>Export</h3>
+      <h3>Backup</h3>
+      <p class="hint" id="backupInfo" style="margin-top:0"></p>
+      <button class="btn primary" onclick="backup()"><i data-ic="download"></i>Back up everything</button>
+      <button class="btn soft" onclick="pickFile()"><i data-ic="upload"></i>Restore from a backup</button>
+      <p class="hint">A backup is one small file with all your months, bills and trips. Save it to Files or iCloud Drive. If you lose your data or get a new phone, restore it here.</p>
+    </div>
+    <div class="group stack">
+      <h3>Bring in data from the old app</h3>
+      <button class="btn soft" onclick="pickFile()"><i data-ic="upload"></i>Import a CSV file</button>
+      <p class="hint">In the old Route to Zero app, open Settings and tap "Export this month as CSV", then pick that file here. Entries land in the right months, and anything already here is skipped.</p>
+    </div>
+    <div class="group stack">
+      <h3>Export a spreadsheet</h3>
       <button class="btn soft" onclick="exportCSV('month')"><i data-ic="download"></i><span id="expMonthLbl">Export this month</span></button>
       <button class="btn soft" onclick="exportCSV('year')"><i data-ic="download"></i><span id="expYearLbl">Export this year</span></button>
       <p class="hint">Saves a spreadsheet file (CSV) of your earnings, spending and miles. Handy for taxes.</p>
@@ -280,11 +308,13 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
       <h3>How your data is saved</h3>
       <p class="hint" style="margin-top:0">Everything stays on this phone, inside this app. Nothing is sent anywhere and there's no account. Each entry is filed under the month it happened, so months start fresh on their own.</p>
     </div>
+    <input type="file" id="fileIn" accept=".json,.csv,application/json,text/csv,text/plain" hidden>
   </section>
 </div>
 
 <nav class="nav"><div class="nav-in">
   <button class="nb active" data-tab="home" onclick="switchTab('home')"><i data-ic="home"></i>Home</button>
+  <button class="nb" data-tab="bills" onclick="switchTab('bills')"><i data-ic="receipt"></i>Bills</button>
   <button class="nb" data-tab="months" onclick="switchTab('months')"><i data-ic="chart"></i>Months</button>
   <button class="nb" data-tab="miles" onclick="switchTab('miles')"><i data-ic="road"></i>Miles</button>
   <button class="nb" data-tab="settings" onclick="switchTab('settings')"><i data-ic="sliders"></i>Settings</button>
@@ -341,6 +371,25 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
   </div>
 </div>
 
+<!-- Bill sheet -->
+<div class="overlay" id="billSheet">
+  <div class="sheet" role="dialog" aria-labelledby="bTitle">
+    <div class="grab"></div>
+    <h3 id="bTitle">Add a bill</h3>
+    <div class="flabel">Name</div>
+    <input class="inp" id="bName" placeholder="Phone" autocomplete="off">
+    <div class="flabel">Amount each month</div>
+    <div class="money"><span>$</span><input id="bAmt" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+    <div class="flabel">Due on day of the month</div>
+    <input class="inp" id="bDay" inputmode="numeric" placeholder="15" autocomplete="off">
+    <div class="actions">
+      <button class="btn soft" onclick="closeSheets()">Cancel</button>
+      <button class="btn primary" onclick="saveBill()">Save</button>
+    </div>
+    <button class="btn danger" id="bDel" onclick="deleteItem('b')">Delete bill</button>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button id="toastUndo" hidden>Undo</button></div>
 
 <script>
@@ -369,7 +418,10 @@ const ICONS = {
   down:'<path d="M6 9l6 6 6-6"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   flame:'<path d="M12 3c.5 3.5 5 5.5 5 10.5a5 5 0 0 1-10 0c0-2.5 1.5-3.8 2.5-5 .3 1.6 1.2 2.6 2.3 2.8C11.5 9 11 6 12 3z"/>',
-  download:'<path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>'
+  download:'<path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>',
+  upload:'<path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/>',
+  receipt:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>'
 };
 const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
 const $ = id => document.getElementById(id);
@@ -423,8 +475,8 @@ function cleanNum(el){
 
 /* ---------- saving and loading ---------- */
 function defaults(){
-  return {version:1, entries:[], trips:[], goal:660, monthGoals:{}, mileageRate:0.70,
-          lastOdometer:null, theme:'auto', lastIncomeCat:'DoorDash'};
+  return {version:1, entries:[], trips:[], bills:[], paid:{}, goal:660, monthGoals:{}, mileageRate:0.70,
+          lastOdometer:null, lastIncomeCat:'DoorDash', lastBackup:null, backupSnooze:null};
 }
 function normalize(d){
   const s = {...defaults(), ...d};
@@ -437,8 +489,13 @@ function normalize(d){
     .map(t => ({id: t.id || uid(), miles: +t.miles, note: t.note || '', ts: +t.ts,
                 odoStart: isFinite(t.odoStart) && t.odoStart !== null ? +t.odoStart : null,
                 odoEnd: isFinite(t.odoEnd) && t.odoEnd !== null ? +t.odoEnd : null}));
+  s.bills = (Array.isArray(s.bills) ? s.bills : [])
+    .filter(b => b && b.name && isFinite(b.amount))
+    .map(b => ({id: b.id || uid(), name: String(b.name), amount: +b.amount,
+                dueDay: Math.min(Math.max(parseInt(b.dueDay) || 1, 1), 31)}));
   if(!s.monthGoals || typeof s.monthGoals !== 'object') s.monthGoals = {};
-  if(!['auto','dark','light'].includes(s.theme)) s.theme = 'auto';
+  if(!s.paid || typeof s.paid !== 'object') s.paid = {};
+  delete s.theme;
   return s;
 }
 // Converts data saved by the old "Route to Zero" version (same device and address only).
@@ -448,7 +505,7 @@ function fromOldFormat(o){
   return {
     entries: tx.map(t => t.type === 'custom' ? {...t, type:'purchase', category: t.category || 'Other'} : t),
     trips, goal: o.goal || 660, mileageRate: o.mileageRate || 0.70,
-    lastOdometer: o.lastOdometer ?? null, theme: o.theme || 'auto'
+    lastOdometer: o.lastOdometer ?? null
   };
 }
 function load(){
@@ -489,17 +546,6 @@ function computeStreak(){
   return n;
 }
 
-/* ---------- theme ---------- */
-const mq = window.matchMedia ? matchMedia('(prefers-color-scheme: light)') : null;
-function applyTheme(){
-  const t = S.theme === 'auto' ? (mq && mq.matches ? 'light' : 'dark') : S.theme;
-  document.documentElement.dataset.theme = t;
-  document.querySelector('meta[name=theme-color]').content = t === 'light' ? '#F3F4F9' : '#0F1328';
-  document.querySelectorAll('[data-theme-btn]').forEach(b => b.classList.toggle('on', b.dataset.themeBtn === S.theme));
-}
-function setTheme(t){ S.theme = t; save(); applyTheme(); }
-if(mq){ mq.addEventListener ? mq.addEventListener('change', applyTheme) : mq.addListener(applyTheme); }
-
 /* ---------- navigation ---------- */
 function switchTab(t){
   tab = t;
@@ -517,17 +563,17 @@ function shiftMonth(n){
 function goNow(){ viewKey = nowKey(); renderAll(); }
 
 /* ---------- rendering ---------- */
-function renderAll(){ renderHeader(); renderHome(); renderMiles(); renderMonths(); renderSettings(); }
+function renderAll(){ renderHeader(); renderHome(); renderBills(); renderMiles(); renderMonths(); renderSettings(); }
 
 function renderHeader(){
-  const monthTab = tab === 'home' || tab === 'miles';
+  const monthTab = tab === 'home' || tab === 'bills' || tab === 'miles';
   $('mnav').hidden = !monthTab;
   $('ttl').hidden = monthTab;
   $('ttl').textContent = tab === 'months' ? 'Months' : 'Settings';
   $('mLabel').textContent = monthName(viewKey);
   $('nextM').classList.toggle('invisible', viewKey >= nowKey());
   const past = viewKey !== nowKey();
-  $('viewH').hidden = !past; $('viewM').hidden = !past;
+  $('viewH').hidden = !past; $('viewM').hidden = !past; $('viewB').hidden = !past;
   const st = computeStreak();
   $('streak').hidden = st < 2;
   $('streak').innerHTML = ic('flame') + st + ' days';
@@ -577,6 +623,8 @@ function renderHome(){
     $('today').hidden = true;
   }
 
+  renderNextBill(isNow);
+  renderNag();
   $('hEarned').textContent = fmt(d.earned);
   $('hSpent').textContent = fmt(d.spent);
   $('hMiles').textContent = miles1(d.miles) + ' mi';
@@ -699,6 +747,270 @@ function renderMonths(){
 function renderSettings(){
   $('expMonthLbl').textContent = 'Export ' + monthName(viewKey);
   $('expYearLbl').textContent = 'Export all of ' + new Date().getFullYear();
+  const hasBills = S.bills.length > 0;
+  $('goalField').hidden = hasBills;
+  $('goalFromBills').hidden = !hasBills;
+  $('goalFromBills').innerHTML = hasBills ? `Your monthly goal is your bills total, <b>${fmt2(billsTotal())}</b>. Change it on the Bills tab.` : '';
+  $('backupInfo').textContent = S.lastBackup
+    ? 'Last backup: ' + new Date(S.lastBackup).toLocaleDateString(undefined, {month:'long', day:'numeric', year:'numeric'})
+    : "You haven't made a backup yet.";
+}
+
+/* ---------- bills ---------- */
+const billsTotal = () => sum(S.bills, 'amount');
+const sortedBills = () => [...S.bills].sort((a,b) => a.dueDay - b.dueDay || a.name.localeCompare(b.name));
+const isPaid = (k, id) => !!(S.paid[k] && S.paid[k][id]);
+// With bills listed, the monthly goal is their total (this month and later).
+function syncGoal(){
+  if(!S.bills.length) return;
+  S.goal = Math.round(billsTotal() * 100) / 100;
+  S.monthGoals[nowKey()] = S.goal;
+}
+function billInfo(b, k){
+  const {y,m} = keyParts(k);
+  const due = new Date(y, m-1, Math.min(b.dueDay, daysInMonth(k)));
+  const dueTxt = due.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+  if(isPaid(k, b.id)) return {paid:true, cls:'due-paid', text:'Paid ' + new Date(S.paid[k][b.id]).toLocaleDateString(undefined, {month:'short', day:'numeric'})};
+  if(k < nowKey()) return {late:true, cls:'due-late', text:'Not marked paid · was due ' + dueTxt};
+  const today = new Date(); today.setHours(0,0,0,0);
+  const days = Math.round((due - today) / 864e5);
+  if(days < 0) return {late:true, cls:'due-late', text:`Overdue ${-days} day${days === -1 ? '' : 's'} · was due ${dueTxt}`};
+  if(days === 0) return {cls:'due-soon', text:'Due today'};
+  if(days === 1) return {cls:'due-soon', text:'Due tomorrow'};
+  return {cls: days <= 3 ? 'due-soon' : '', text:`Due ${dueTxt} · in ${days} days`};
+}
+function renderBills(){
+  const k = viewKey;
+  if(!S.bills.length){
+    $('billSummary').innerHTML = '';
+    $('billList').innerHTML = `<div class="empty">Add each bill you pay every month, like rent, phone or car insurance. Your monthly goal will add itself up from this list, and you can check bills off as you pay them.</div>`;
+    return;
+  }
+  const list = sortedBills(), total = billsTotal();
+  const paidList = list.filter(b => isPaid(k, b.id));
+  const paidAmt = sum(paidList, 'amount');
+  const all = paidList.length === list.length;
+  $('billSummary').innerHTML = `<div class="group">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
+      <div><div class="ms" style="margin:0">Paid ${k === nowKey() ? 'this month' : 'in ' + esc(monthName(k))}</div>
+      <div class="ring-n" style="font-size:30px">${fmt(paidAmt)} <span style="font-size:16px;color:var(--muted);font-weight:600">of ${fmt(total)}</span></div></div>
+      <span class="pill ${all ? 'ok' : 'go'}">${paidList.length} of ${list.length} paid</span>
+    </div>
+    <div class="bar ${all ? 'ok' : ''}" style="margin:0"><span style="width:${total ? (paidAmt / total * 100).toFixed(1) : 0}%"></span></div></div>`;
+  $('billList').innerHTML = '<div class="list">' + list.map(b => {
+    const i = billInfo(b, k);
+    return `<div class="brow ${i.paid ? 'paid' : ''}">
+      <button class="check ${i.paid ? 'on' : ''}" data-paid="${b.id}" aria-label="${i.paid ? 'Mark ' + esc(b.name) + ' unpaid' : 'Mark ' + esc(b.name) + ' paid'}">${ic('check')}</button>
+      <button class="row" data-edit="b:${b.id}"><span class="rt"><span class="r1">${esc(b.name)}</span><span class="r2 ${i.cls}">${esc(i.text)}</span></span><span class="amt">${fmt2(b.amount)}</span></button>
+    </div>`;
+  }).join('') + '</div>';
+}
+function renderNextBill(isNow){
+  const el = $('nextBill');
+  if(!isNow || !S.bills.length){ el.innerHTML = ''; return; }
+  const k = nowKey();
+  const unpaid = sortedBills().filter(b => !isPaid(k, b.id));
+  if(!unpaid.length){
+    el.innerHTML = `<div class="nextbill done"><div><div class="nx-l">Bills</div><div class="nx-t">All ${S.bills.length} bills paid this month</div></div>${ic('check')}</div>`;
+    return;
+  }
+  const b = unpaid[0], i = billInfo(b, k);
+  const more = unpaid.length > 1 ? ` · ${unpaid.length - 1} more unpaid` : '';
+  el.innerHTML = `<div class="nextbill ${i.late ? 'late' : ''}"><div style="min-width:0">
+    <div class="nx-l">${i.late ? 'Overdue bill' : 'Next bill'}${more}</div>
+    <div class="nx-t">${esc(b.name)} · ${fmt2(b.amount)}</div>
+    <div class="nx-l">${esc(i.text)}</div></div>
+    <button data-paid-now="${b.id}">Mark paid</button></div>`;
+}
+function togglePaid(id, k){
+  const b = S.bills.find(x => x.id === id);
+  if(!b) return;
+  S.paid[k] = S.paid[k] || {};
+  if(S.paid[k][id]){
+    delete S.paid[k][id];
+    save(); renderAll(); toast(b.name + ' marked unpaid');
+  } else {
+    S.paid[k][id] = Date.now();
+    save(); renderAll();
+    toast(b.name + ' marked paid', () => { delete S.paid[k][id]; save(); renderAll(); });
+  }
+}
+function openBill(id){
+  const b = id ? S.bills.find(x => x.id === id) : null;
+  editing = b ? {kind:'b', id} : null;
+  $('bTitle').textContent = b ? 'Edit bill' : 'Add a bill';
+  $('bName').value = b ? b.name : '';
+  $('bAmt').value = b ? String(b.amount) : '';
+  $('bDay').value = b ? String(b.dueDay) : '';
+  $('bDel').hidden = !b;
+  show('billSheet');
+  if(!b) $('bName').focus({preventScroll:true});
+}
+function saveBill(){
+  const name = $('bName').value.trim();
+  const amount = Math.round(parseFloat($('bAmt').value) * 100) / 100;
+  const day = parseInt($('bDay').value, 10);
+  if(!name){ toast('Give the bill a name'); $('bName').focus(); return; }
+  if(!(amount > 0)){ toast('Enter the amount'); $('bAmt').focus(); return; }
+  if(!(day >= 1 && day <= 31)){ toast('Due day should be 1 to 31'); $('bDay').focus(); return; }
+  const wasEditing = !!editing;
+  if(editing) Object.assign(S.bills.find(x => x.id === editing.id), {name, amount, dueDay: day});
+  else S.bills.push({id: uid(), name, amount, dueDay: day});
+  syncGoal(); save(); closeSheets(); renderAll();
+  toast((wasEditing ? 'Bill updated' : 'Bill added') + ' · goal is now ' + fmt2(S.goal));
+}
+
+/* ---------- backup, restore and import ---------- */
+function renderNag(){
+  const el = $('nag'), now = Date.now(), day = 864e5;
+  const enough = S.entries.length + S.trips.length >= 5;
+  const due = !S.lastBackup || now - S.lastBackup > 30 * day;
+  const snoozed = S.backupSnooze && now - S.backupSnooze < 5 * day;
+  if(!enough || !due || snoozed || viewKey !== nowKey()){ el.innerHTML = ''; return; }
+  const last = S.lastBackup ? `Your last one was ${Math.floor((now - S.lastBackup) / day)} days ago.` : "You haven't made one yet.";
+  el.innerHTML = `<div class="nag"><div class="txt"><b>Time for a backup</b>${last}</div>
+    <div class="nag-btns"><button class="later" onclick="snoozeBackup()">Later</button><button class="go" onclick="backup()">Back up</button></div></div>`;
+}
+function snoozeBackup(){ S.backupSnooze = Date.now(); save(); renderNag(); }
+// Phones get the share sheet (Save to Files); computers get a normal download.
+async function saveFile(name, text, type){
+  const blob = new Blob([text], {type});
+  const touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+  if(touch && navigator.canShare){
+    const file = new File([blob], name, {type});
+    if(navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file], title:name}); return true; }
+      catch(e){ if(e.name === 'AbortError') return false; }
+    }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  return true;
+}
+async function backup(){
+  const name = 'payoff-tracker-backup-' + dateStr(Date.now()) + '.json';
+  const json = JSON.stringify({app:'payoff-tracker', version:1, exportedAt:new Date().toISOString(), data:S});
+  if(!(await saveFile(name, json, 'application/json'))) return;
+  S.lastBackup = Date.now(); save(); renderAll();
+  toast('Backup saved');
+}
+function pickFile(){ $('fileIn').value = ''; $('fileIn').click(); }
+$('fileIn').addEventListener('change', async ev => {
+  const f = ev.target.files[0];
+  if(!f) return;
+  let text;
+  try{ text = (await f.text()).replace(/^﻿/, ''); }catch(e){ toast("Couldn't read that file"); return; }
+  if(text.trim().startsWith('{')) restoreBackup(text); else importCSV(text);
+});
+function restoreBackup(text){
+  let obj = null;
+  try{ obj = JSON.parse(text); }catch(e){}
+  const data = obj && obj.app === 'payoff-tracker' ? obj.data
+             : obj && Array.isArray(obj.transactions) ? fromOldFormat(obj) : null;
+  if(!data || !Array.isArray(data.entries)){ toast("That file isn't a Payoff Tracker backup"); return; }
+  const incoming = normalize(data);
+  const when = obj.exportedAt ? new Date(obj.exportedAt).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) : 'an older version';
+  if(!confirm(`Replace everything in the app with this backup from ${when}?\n\nIt has ${incoming.entries.length} entries, ${incoming.trips.length} trips and ${incoming.bills.length} bills.`)) return;
+  const prev = S;
+  S = incoming;
+  if(S.monthGoals[nowKey()] == null) S.monthGoals[nowKey()] = S.goal;
+  save(); renderAll();
+  toast('Backup restored', () => { S = prev; save(); renderAll(); toast('Restore undone'); });
+}
+function parseCSV(text){
+  const rows = []; let row = [], cell = '', q = false;
+  for(let i = 0; i < text.length; i++){
+    const c = text[i];
+    if(q){
+      if(c === '"'){ if(text[i+1] === '"'){ cell += '"'; i++; } else q = false; }
+      else cell += c;
+    } else if(c === '"') q = true;
+    else if(c === ','){ row.push(cell); cell = ''; }
+    else if(c === '\n' || c === '\r'){
+      if(c === '\r' && text[i+1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += c;
+  }
+  if(cell !== '' || row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+// Reads dates like "9/14/2026, 3:22:10 PM" (old app) or "2026-09-14" + "3:22 PM" (this app).
+function parseWhen(dateTxt, timeTxt){
+  let y, m, d, mm = dateTxt.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(mm){ y = +mm[1]; m = +mm[2]; d = +mm[3]; }
+  else {
+    mm = dateTxt.match(/(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})/);
+    if(!mm) return null;
+    m = +mm[1]; d = +mm[2]; y = +mm[3];
+    if(y < 100) y += 2000;
+    if(m > 12) [m, d] = [d, m];
+  }
+  let h = 12, mi = 0, s = 0;
+  const t = (timeTxt || '').match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp])?/);
+  if(t){
+    h = +t[1]; mi = +t[2]; s = +(t[3] || 0);
+    if(t[4]){ const pm = /p/i.test(t[4]); if(pm && h < 12) h += 12; if(!pm && h === 12) h = 0; }
+  }
+  const ts = new Date(y, m-1, d, h, mi, s).getTime();
+  return isFinite(ts) ? ts : null;
+}
+function importCSV(text){
+  const rows = parseCSV(text);
+  if(rows.length < 2){ toast("That file doesn't have any entries"); return; }
+  const head = rows[0].map(h => h.trim().toLowerCase());
+  const isNew = head.includes('time') && head.includes('miles');
+  const isOld = head[0] === 'type' && head.includes('amount');
+  if(!isNew && !isOld){ toast("That file isn't from this app or the old one"); return; }
+  const typeMap = {income:'income', earned:'income', gas:'gas', purchase:'purchase', spent:'purchase', custom:'purchase'};
+  const entries = [], trips = []; let bad = 0;
+  rows.slice(1).forEach(r => {
+    let type, amount, cat = null, note = '', ts, miles = null;
+    if(isNew){
+      const col = n => (r[head.indexOf(n)] || '').trim();
+      ts = parseWhen(col('date'), col('time'));
+      note = col('note');
+      if(col('type').toLowerCase() === 'miles') miles = parseFloat(col('miles'));
+      else { type = typeMap[col('type').toLowerCase()]; amount = Math.abs(parseFloat(col('amount'))); cat = col('category') || null; }
+    } else {
+      // Old app columns: Type,Amount,Category,Note,Date. Its date has an
+      // unquoted comma in it, so the date is everything from column 5 on.
+      const ty = (r[0] || '').trim().toLowerCase();
+      const when = r.slice(4).join(',');
+      ts = parseWhen(when, when);
+      note = (r[3] || '').trim();
+      if(ty === 'mileage') miles = parseFloat(r[2]);
+      else { type = typeMap[ty]; amount = parseFloat(r[1]); cat = (r[2] || '').trim() || (ty === 'custom' ? 'Other' : null); }
+    }
+    if(!ts){ bad++; return; }
+    if(miles !== null){
+      if(miles > 0) trips.push({id: uid(), miles: Math.round(miles * 10) / 10, note, ts, odoStart: null, odoEnd: null});
+      else bad++;
+      return;
+    }
+    if(!type || !(amount > 0)){ bad++; return; }
+    entries.push({id: uid(), type, amount: Math.round(amount * 100) / 100, category: type === 'gas' ? null : cat, note, ts});
+  });
+  // Skip anything already in the app (same kind, amount and minute).
+  const keyE = e => e.type + '|' + e.amount.toFixed(2) + '|' + Math.floor(e.ts / 60000);
+  const keyT = t => t.miles.toFixed(1) + '|' + Math.floor(t.ts / 60000);
+  const haveE = new Set(S.entries.map(keyE)), haveT = new Set(S.trips.map(keyT));
+  const newE = entries.filter(e => !haveE.has(keyE(e))), newT = trips.filter(t => !haveT.has(keyT(t)));
+  const dup = entries.length + trips.length - newE.length - newT.length;
+  if(!newE.length && !newT.length){ toast(dup ? 'Everything in that file is already here' : "Couldn't find any entries in that file"); return; }
+  const months = [...new Set([...newE, ...newT].sort((a,b) => a.ts - b.ts).map(x => monthName(mk(x.ts))))];
+  const what = [newE.length && (newE.length === 1 ? '1 entry' : newE.length + ' entries'),
+                newT.length && (newT.length === 1 ? '1 trip' : newT.length + ' trips')].filter(Boolean).join(' and ');
+  if(!confirm(`Import ${what}?\n\nThey go into: ${months.join(', ')}` +
+      (dup ? `\nSkipping ${dup} already in the app.` : '') + (bad ? `\n${bad} rows couldn't be read and will be left out.` : ''))) return;
+  S.entries.push(...newE); S.trips.push(...newT);
+  save(); renderAll();
+  const ids = new Set([...newE, ...newT].map(x => x.id));
+  toast(`Imported ${newE.length + newT.length} items`, () => {
+    S.entries = S.entries.filter(e => !ids.has(e.id)); S.trips = S.trips.filter(t => !ids.has(t.id));
+    save(); renderAll(); toast('Import undone');
+  });
 }
 
 /* ---------- add / edit entries ---------- */
@@ -819,13 +1131,15 @@ function saveTrip(){
 /* ---------- delete with undo ---------- */
 function deleteItem(kind){
   if(!editing) return;
-  const arr = kind === 'e' ? S.entries : S.trips;
+  const arr = kind === 'e' ? S.entries : kind === 't' ? S.trips : S.bills;
   const idx = arr.findIndex(x => x.id === editing.id);
   if(idx < 0) return;
   const [item] = arr.splice(idx, 1);
+  if(kind === 'b') syncGoal();
   save(); closeSheets(); renderAll();
-  toast(kind === 'e' ? 'Entry deleted' : 'Trip deleted', () => {
+  toast({e:'Entry deleted', t:'Trip deleted', b:'Bill deleted'}[kind], () => {
     arr.splice(Math.min(idx, arr.length), 0, item);
+    if(kind === 'b') syncGoal();
     save(); renderAll(); toast('Restored');
   });
 }
@@ -833,11 +1147,11 @@ function deleteItem(kind){
 /* ---------- settings ---------- */
 function saveSettings(){
   const g = parseFloat($('goalIn').value), r = parseFloat($('rateIn').value);
-  if(isFinite(g) && g >= 0){ S.goal = g; S.monthGoals[nowKey()] = g; }
+  if(!S.bills.length && isFinite(g) && g >= 0){ S.goal = g; S.monthGoals[nowKey()] = g; }
   if(isFinite(r) && r > 0) S.mileageRate = r;
   save(); renderAll(); toast('Settings saved');
 }
-function exportCSV(scope){
+async function exportCSV(scope){
   const yr = new Date().getFullYear();
   const inScope = ts => scope === 'month' ? mk(ts) === viewKey : new Date(ts).getFullYear() === yr;
   const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
@@ -849,12 +1163,7 @@ function exportCSV(scope){
   const lines = [['Date','Time','Type','Category','Note','Amount','Miles'].join(',')]
     .concat(rows.map(r => [dateStr(r.ts), timeStr(r.ts), ...r.cells].map(q).join(',')));
   const name = 'payoff-tracker-' + (scope === 'month' ? viewKey : yr) + '.csv';
-  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  toast('Exported ' + name);
+  if(await saveFile(name, lines.join('\n'), 'text/csv')) toast('Exported ' + name);
 }
 
 /* ---------- feedback ---------- */
@@ -887,7 +1196,11 @@ function celebrate(){
 /* ---------- wiring ---------- */
 document.addEventListener('click', ev => {
   const r = ev.target.closest('[data-edit]');
-  if(r){ const [k, id] = r.dataset.edit.split(':'); k === 'e' ? openEntry(null, id) : openTrip(id); return; }
+  if(r){ const [k, id] = r.dataset.edit.split(':'); k === 'e' ? openEntry(null, id) : k === 't' ? openTrip(id) : openBill(id); return; }
+  const p = ev.target.closest('[data-paid]');
+  if(p){ togglePaid(p.dataset.paid, viewKey); return; }
+  const pn = ev.target.closest('[data-paid-now]');
+  if(pn){ togglePaid(pn.dataset.paidNow, nowKey()); return; }
   const c = ev.target.closest('[data-cat]');
   if(c){ eCat = eCat === c.dataset.cat ? null : c.dataset.cat; setType(eType, true); return; }
   const m = ev.target.closest('[data-month]');
@@ -900,10 +1213,11 @@ document.addEventListener('keydown', ev => {
   if(ev.key === 'Escape') closeSheets();
   if(ev.key === 'Enter' && ev.target.matches('.overlay input:not([type=date])')){
     ev.preventDefault();
-    $('entrySheet').classList.contains('show') ? saveEntry() : saveTrip();
+    $('entrySheet').classList.contains('show') ? saveEntry()
+      : $('billSheet').classList.contains('show') ? saveBill() : saveTrip();
   }
 });
-['eAmt','tMiles','tStart','tEnd','goalIn','rateIn'].forEach(id => $(id).addEventListener('input', ev => cleanNum(ev.target)));
+['eAmt','tMiles','tStart','tEnd','goalIn','rateIn','bAmt','bDay'].forEach(id => $(id).addEventListener('input', ev => cleanNum(ev.target)));
 // When the app comes back after midnight or a new month, move to the new month.
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState !== 'visible') return;
@@ -919,7 +1233,6 @@ document.addEventListener('visibilitychange', () => {
 document.querySelectorAll('[data-ic]').forEach(el => { el.outerHTML = ic(el.dataset.ic); });
 load();
 openMonths.add(nowKey());
-applyTheme();
 renderAll();
 </script>
 </body>
