@@ -468,8 +468,16 @@ a.row .ext{color:var(--faint)}
     <h3 id="bTitle">Add a bill</h3>
     <div class="flabel">Name</div>
     <input class="inp" id="bName" placeholder="Phone" autocomplete="off">
-    <div class="flabel">Amount each month</div>
+    <div class="flabel" id="bAmtLbl">Amount each month</div>
     <div class="money"><span>$</span><input id="bAmt" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+    <div id="bScopeWrap" hidden>
+      <div class="flabel">Change the amount for</div>
+      <div class="seg" style="margin-bottom:6px">
+        <button data-bscope="month" id="bScopeMonth">Just this month</button>
+        <button data-bscope="all">Every month</button>
+      </div>
+      <p class="hint" id="bScopeHint" style="margin:0 2px 14px"></p>
+    </div>
     <div class="flabel">Due on day of the month</div>
     <input class="inp" id="bDay" inputmode="numeric" placeholder="15" autocomplete="off" oninput="updBillHint()">
     <div class="flabel">When do you pay each month's bill?</div>
@@ -683,6 +691,13 @@ function normalize(d){
   if(!s.mileageRates.length) s.mileageRates = DEFAULT_RATES.map(r => ({...r}));
   delete s.mileageRate; // older versions had one rate for every year
   if(!s.dismissed || typeof s.dismissed !== 'object') s.dismissed = {};
+  // One-month bill amounts: billAmts["2026-10"][billId] = 700 when that month differs from usual.
+  const ba = {};
+  Object.entries(s.billAmts && typeof s.billAmts === 'object' ? s.billAmts : {}).forEach(([k, m]) => {
+    if(!/^\d{4}-\d{2}$/.test(k) || !m || typeof m !== 'object') return;
+    Object.entries(m).forEach(([id, v]) => { if(isFinite(v) && v >= 0){ ba[k] = ba[k] || {}; ba[k][id] = +v; } });
+  });
+  s.billAmts = ba;
   if(!s.monthGoals || typeof s.monthGoals !== 'object') s.monthGoals = {};
   if(!s.paid || typeof s.paid !== 'object') s.paid = {};
   delete s.theme;
@@ -980,6 +995,18 @@ function renderSettings(){
 
 /* ---------- bills ---------- */
 const billsTotal = () => sum(S.bills, 'amount');
+// What a bill is for month k: a one-month amount if you set one, else its usual amount.
+const amountFor = (b, k) => S.billAmts[k] && S.billAmts[k][b.id] != null ? S.billAmts[k][b.id] : b.amount;
+const monthBillsTotal = k => S.bills.reduce((a, b) => a + amountFor(b, k), 0);
+const round2 = n => Math.round(n * 100) / 100;
+// Sets month k's amount for bill b and moves that month's goal by the difference.
+function setMonthAmount(b, k, amt){
+  const old = amountFor(b, k);
+  S.billAmts[k] = S.billAmts[k] || {};
+  if(Math.abs(amt - b.amount) < 0.005) delete S.billAmts[k][b.id]; else S.billAmts[k][b.id] = amt;
+  if(!Object.keys(S.billAmts[k]).length) delete S.billAmts[k];
+  S.monthGoals[k] = round2(goalFor(k) + amountFor(b, k) - old);
+}
 const sortedBills = k => [...S.bills].sort((a,b) => dueDate(a, k) - dueDate(b, k) || a.name.localeCompare(b.name));
 const isPaid = (k, id) => !!(S.paid[k] && S.paid[k][id]);
 const shortDay = d => d.toLocaleDateString(undefined, {month:'short', day:'numeric'});
@@ -994,8 +1021,8 @@ function dueDate(b, k){
 // With bills listed, the monthly goal is their total (this month and later).
 function syncGoal(){
   if(!S.bills.length) return;
-  S.goal = Math.round(billsTotal() * 100) / 100;
-  S.monthGoals[nowKey()] = S.goal;
+  S.goal = round2(billsTotal());
+  S.monthGoals[nowKey()] = round2(monthBillsTotal(nowKey()));
 }
 function billInfo(b, k){
   const due = dueDate(b, k), dueTxt = shortDay(due);
@@ -1019,9 +1046,9 @@ function renderBills(){
     $('billList').innerHTML = `<div class="empty">Add each bill you pay every month, like rent, phone or car insurance. Your monthly goal will add itself up from this list, and you can check bills off as you pay them.</div>`;
     return;
   }
-  const list = sortedBills(k), total = billsTotal();
+  const list = sortedBills(k), total = monthBillsTotal(k);
   const paidList = list.filter(b => billInfo(b, k).paid);
-  const paidAmt = sum(paidList, 'amount');
+  const paidAmt = paidList.reduce((a, b) => a + amountFor(b, k), 0);
   const all = paidList.length === list.length;
   $('billSummary').innerHTML = `<div class="group">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
@@ -1036,7 +1063,8 @@ function renderBills(){
       ${i.auto && !isPaid(k, b.id)
         ? `<span class="check auto ${i.paid ? 'on' : ''}" title="Autopay">${ic(i.paid ? 'check' : 'auto')}</span>`
         : `<button class="check ${i.paid ? 'on' : ''}" data-paid="${b.id}" aria-label="${i.paid ? 'Mark ' + esc(b.name) + ' unpaid' : 'Mark ' + esc(b.name) + ' paid'}">${ic('check')}</button>`}
-      <button class="row" data-edit="b:${b.id}"><span class="rt"><span class="r1">${esc(b.name)}</span><span class="r2 ${i.cls}">${esc(i.text)}</span></span><span class="amt">${fmt2(b.amount)}</span></button>
+      <button class="row" data-edit="b:${b.id}"><span class="rt"><span class="r1">${esc(b.name)}</span><span class="r2 ${i.cls}">${esc(i.text)}</span></span>
+        <span style="text-align:right"><span class="amt" style="display:block">${fmt2(amountFor(b, k))}</span>${amountFor(b, k) !== b.amount ? `<span class="r2">usually ${fmt2(b.amount)}</span>` : ''}</span></button>
     </div>`;
   }).join('') + '</div>';
 }
@@ -1072,9 +1100,13 @@ function openBill(id){
   editing = b ? {kind:'b', id} : null;
   $('bTitle').textContent = b ? 'Edit bill' : 'Add a bill';
   $('bName').value = b ? b.name : '';
-  $('bAmt').value = b ? String(b.amount) : '';
+  $('bAmt').value = b ? String(amountFor(b, viewKey)) : '';
   $('bDay').value = b ? String(b.dueDay) : '';
   $('bDel').hidden = !b;
+  $('bScopeWrap').hidden = !b;
+  $('bAmtLbl').textContent = b ? 'Amount' : 'Amount each month';
+  $('bScopeMonth').textContent = 'Just ' + monthName(viewKey).split(' ')[0];
+  setBillScope('month');
   setBillNext(b ? b.nextMonth : S.lastBillNext);
   setBillAuto(b ? b.autopay : false);
   show('billSheet');
@@ -1087,21 +1119,43 @@ function saveBill(){
   if(!name){ toast('Give the bill a name'); $('bName').focus(); return; }
   if(!(amount > 0)){ toast('Enter the amount'); $('bAmt').focus(); return; }
   if(!(day >= 1 && day <= 31)){ toast('Due day should be 1 to 31'); $('bDay').focus(); return; }
-  const wasEditing = !!editing;
+  const wasEditing = !!editing, k = viewKey, mon = monthName(k).split(' ')[0];
   let b;
-  if(editing){ b = S.bills.find(x => x.id === editing.id); Object.assign(b, {name, amount, dueDay: day, nextMonth: bNext, autopay: bAuto}); }
+  if(editing){
+    b = S.bills.find(x => x.id === editing.id);
+    Object.assign(b, {name, dueDay: day, nextMonth: bNext, autopay: bAuto});
+    if(bScope === 'month') setMonthAmount(b, k, amount);
+    else {
+      // New usual amount. The month you're looking at follows it too.
+      const old = amountFor(b, k);
+      b.amount = amount;
+      if(S.billAmts[k]){ delete S.billAmts[k][b.id]; if(!Object.keys(S.billAmts[k]).length) delete S.billAmts[k]; }
+      if(k !== nowKey()) S.monthGoals[k] = round2(goalFor(k) + amount - old);
+    }
+  }
   else { b = {id: uid(), name, amount, dueDay: day, nextMonth: bNext, autopay: bAuto}; S.bills.push(b); }
   S.lastBillNext = bNext;
   closeSheets();
   askAlreadyPaid(b);
   syncGoal(); save(); renderAll();
-  toast((wasEditing ? 'Bill updated' : 'Bill added') + ' · goal is now ' + fmt2(S.goal));
+  toast(wasEditing && bScope === 'month' && amount !== b.amount
+    ? `${mon}'s ${b.name} is ${fmt2(amount)} · usually ${fmt2(b.amount)}`
+    : (wasEditing ? 'Bill updated' : 'Bill added') + ` · ${mon}'s goal is now ${fmt2(goalFor(k))}`);
 }
 
 function setBillNext(v){
   bNext = !!v;
   document.querySelectorAll('[data-bnext]').forEach(x => x.classList.toggle('on', x.dataset.bnext === (bNext ? '1' : '0')));
   updBillHint();
+}
+let bScope = 'month';
+function setBillScope(v){
+  bScope = v;
+  document.querySelectorAll('[data-bscope]').forEach(x => x.classList.toggle('on', x.dataset.bscope === v));
+  const b = editing && S.bills.find(x => x.id === editing.id), mon = monthName(viewKey).split(' ')[0];
+  if(b) $('bScopeHint').textContent = v === 'month'
+    ? `Only ${mon} changes. Other months stay at ${fmt2(b.amount)}.`
+    : `Changes the usual amount, from ${mon} on.`;
 }
 function setBillAuto(v){
   bAuto = !!v;
@@ -1910,6 +1964,8 @@ document.addEventListener('click', ev => {
     else if(act === 'taxes'){ taxYear = +v; switchTab('taxes'); }
     return;
   }
+  const bs = ev.target.closest('[data-bscope]');
+  if(bs){ setBillScope(bs.dataset.bscope); return; }
   const rd = ev.target.closest('[data-rdel]');
   if(rd){ removeRate(rd.dataset.rdel); return; }
   const tp = ev.target.closest('[data-tpay]');
