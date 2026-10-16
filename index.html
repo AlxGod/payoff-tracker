@@ -155,6 +155,16 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .stepper button:active{opacity:.7}
 .stepper span{font-family:var(--num);font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
 .linkbtn{color:var(--amber);font-weight:650}
+.rcpt{display:flex;align-items:center;gap:12px;margin:0 0 12px}
+.rcpt .thumb{flex-shrink:0;width:58px;height:58px;border-radius:12px;overflow:hidden;border:1px solid var(--line-2);background:var(--surface-2)}
+.rcpt .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.rcpt .rinfo{flex:1;min-width:0;font-size:13px;color:var(--muted)}
+.rcpt .rinfo b{display:block;color:var(--text);font-size:14px;font-weight:650}
+.rcpt .linkbtn{font-size:14px;padding:6px 2px}
+.viewer{flex-direction:column;align-items:stretch;justify-content:flex-start;background:#000;overflow:auto;padding:calc(10px + env(safe-area-inset-top)) 0 calc(14px + env(safe-area-inset-bottom))}
+.viewer .vbar{position:sticky;top:0;left:0;display:flex;justify-content:flex-end;padding:0 12px 10px}
+.viewer img{display:block;width:100%;height:auto;margin:auto 0}
+.viewer.zoom img{width:220%;max-width:none}
 .gh{font-size:13px;font-weight:700;margin:16px 2px 4px}
 .gh.ok{color:var(--teal)} .gh.no{color:var(--coral)}
 .gitem{padding:9px 2px;font-size:14px}
@@ -379,6 +389,7 @@ a.row .ext{color:var(--faint)}
       <p class="hint">Always open it from your home-screen icon. On iPhone, the home-screen app and a regular Safari tab keep separate data.</p>
     </div>
     <input type="file" id="fileIn" accept=".json,.csv,application/json,text/csv,text/plain" hidden>
+    <input type="file" id="rcptIn" accept="image/*" hidden>
   </section>
 </div>
 </div>
@@ -419,7 +430,9 @@ a.row .ext{color:var(--faint)}
     <div id="eToolWrap" hidden>
       <div class="flabel">What kind of work tool?</div>
       <div class="chips" id="eToolChips" style="margin-bottom:6px"></div>
-      <p class="hint" style="margin:0 2px 14px">Keep the receipt (snap a photo). <button class="linkbtn" onclick="openGuide()">What counts?</button></p>
+      <div class="flabel">Receipt</div>
+      <div id="eRcpt"></div>
+      <p class="hint" style="margin:0 2px 14px"><button class="linkbtn" onclick="openGuide()">What counts as a work tool?</button></p>
     </div>
     <div class="flabel">Date</div>
     <input class="inp" type="date" id="eDate">
@@ -541,6 +554,12 @@ a.row .ext{color:var(--faint)}
   </div>
 </div>
 
+<!-- Full-size receipt photo (opens on top of the entry sheet) -->
+<div class="overlay viewer" id="rcptView" style="z-index:70">
+  <div class="vbar"><button class="btn soft" style="width:auto;padding:10px 18px" onclick="closeViewer()">Close</button></div>
+  <img id="rcptImg" alt="Receipt photo" onclick="$('rcptView').classList.toggle('zoom')">
+</div>
+
 <!-- What counts as a work tool (opens on top of the entry sheet) -->
 <div class="overlay" id="guideSheet" style="z-index:60">
   <div class="sheet" role="dialog" aria-labelledby="gTitle">
@@ -603,6 +622,7 @@ const ICONS = {
   flame:'<path d="M12 3c.5 3.5 5 5.5 5 10.5a5 5 0 0 1-10 0c0-2.5 1.5-3.8 2.5-5 .3 1.6 1.2 2.6 2.3 2.8C11.5 9 11 6 12 3z"/>',
   download:'<path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>',
   upload:'<path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/>',
+  camera:'<path d="M4 8.5a2 2 0 0 1 2-2h2l1.5-2h5L16 6.5h2a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/>',
   receipt:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   x:'<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
@@ -681,7 +701,7 @@ function normalize(d){
                 amount: +e.amount, category: e.category || null, note: e.note || '', ts: +e.ts,
                 kind: e.kind === 'pay' || e.kind === 'commission' ? e.kind : null,
                 cars: e.kind === 'commission' ? Math.max(parseInt(e.cars) || 1, 1) : null,
-                taxKind: e.taxKind ? String(e.taxKind) : null}));
+                taxKind: e.taxKind ? String(e.taxKind) : null, receipt: !!e.receipt}));
   s.trips = (Array.isArray(s.trips) ? s.trips : [])
     .filter(t => t && isFinite(t.miles) && isFinite(t.ts))
     .map(t => ({id: t.id || uid(), miles: +t.miles, note: t.note || '', ts: +t.ts,
@@ -922,7 +942,7 @@ function entryLabel(e){
 function entryRow(e){
   const T = TYPES[e.type];
   const title = e.note || entryLabel(e);
-  const sub = [e.note ? entryLabel(e) : '', timeStr(e.ts)].filter(Boolean).join(' · ');
+  const sub = [e.note ? entryLabel(e) : '', e.receipt ? 'receipt ✓' : '', timeStr(e.ts)].filter(Boolean).join(' · ');
   return `<button class="row" data-edit="e:${e.id}">
     <span class="dot ${T.cls}">${ic(T.icon)}</span>
     <span class="rt"><span class="r1">${esc(title)}</span><span class="r2">${esc(sub)}</span></span>
@@ -1801,6 +1821,7 @@ function openEntry(type, id){
   eCars = e && e.cars ? e.cars : 1;
   eTool = e ? e.taxKind : null;
   eAuto = false;
+  openRcpt(e);
   setType(eType, !!e);
   if(!e) fillDet();
   show('entrySheet');
@@ -1831,6 +1852,7 @@ function updExtras(){
     $('eCars').textContent = eCars;
     $('eCarsHint').textContent = `${eCars} × ${fmt2(S.commissionRate)} = ${fmt2(eCars * S.commissionRate)}`;
   } else if(eAuto){ $('eAmt').value = ''; eAuto = false; }
+  if(isTool()) renderRcpt();
   if(isTool()) $('eToolChips').innerHTML = TOOL_KINDS.map(([k]) => `<button class="chip ${k === eTool ? 'on' : ''}" data-tool="${esc(k)}">${esc(k)}</button>`).join('');
 }
 // Commission fills in cars × rate. Weekly pay changes week to week, so you
@@ -1868,6 +1890,10 @@ function saveEntry(){
     e = {id: uid(), type: eType, amount, category, note, ts: tsFromDate($('eDate').value), ...extra};
     S.entries.push(e);
   }
+  const had = !!e.receipt;
+  e.receipt = isTool() && !!eRc.data;
+  if(e.receipt && eRc.dirty) storeReceipt(e, eRc.data);
+  else if(had && !e.receipt) delReceipt(e.id).catch(() => {});
   if(eType === 'income' && category) S.lastIncomeCat = category;
   save(); closeSheets(); renderAll();
   const where = mk(e.ts) !== viewKey ? ' to ' + monthName(mk(e.ts)) : '';
@@ -1878,6 +1904,106 @@ function saveEntry(){
   if(before > 0 && monthData(nowKey()).left <= 0) celebrate();
   else if(lapsAfter > lapsBefore) celebrate(`${monthsAhead(lapsAfter)} on bills 🎉`);
 }
+
+/* ---------- receipt photos ---------- */
+// Photos are kept in IndexedDB (the phone's storage area for files), one per
+// entry id. The main save only holds a receipt: true flag, because it has
+// room for about 5 MB in all.
+let eRc = {data: null, dirty: false, busy: false}, rdbP = null;
+function rdb(){
+  return rdbP = rdbP || new Promise((res, rej) => {
+    const r = indexedDB.open('payoff-tracker-receipts', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('photos');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => { rdbP = null; rej(r.error); };
+  });
+}
+async function rcptTx(mode, fn){
+  const db = await rdb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('photos', mode), req = fn(tx.objectStore('photos'));
+    tx.oncomplete = () => res(req.result);
+    tx.onerror = tx.onabort = () => rej(tx.error);
+  });
+}
+const getReceipt = id => rcptTx('readonly', st => st.get(id));
+const putReceipt = (id, data) => rcptTx('readwrite', st => st.put(data, id));
+const delReceipt = id => rcptTx('readwrite', st => st.delete(id));
+// Photos stay a while after their entry is deleted so Undo can bring them
+// back; this clears them out the next time the app starts.
+async function cleanReceipts(){
+  if(!S.entries.length) return;
+  try{
+    const keep = new Set(S.entries.filter(e => e.receipt).map(e => e.id));
+    for(const id of await rcptTx('readonly', st => st.getAllKeys())) if(!keep.has(id)) await delReceipt(id);
+  }catch(e){}
+}
+async function storeReceipt(e, data){
+  try{
+    await putReceipt(e.id, data);
+    if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  }catch(err){
+    e.receipt = false; save(); renderAll();
+    toast("Couldn't save the receipt photo. Your phone's storage may be full.");
+  }
+}
+// Camera photos are 3–5 MB. This makes a copy about 1600 pixels on the long
+// side (still easy to read) that is around 0.3 MB.
+function shrinkPhoto(file, max = 1600, quality = 0.7){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      const g = c.getContext('2d');
+      g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+      g.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('not an image')); };
+    img.src = url;
+  });
+}
+function openRcpt(e){
+  eRc = {data: null, dirty: false, busy: !!(e && e.receipt)};
+  if(!eRc.busy) return;
+  const mine = eRc;
+  getReceipt(e.id).then(d => { mine.data = d || null; }).catch(() => {})
+    .finally(() => { mine.busy = false; if(eRc === mine && isTool()) renderRcpt(); });
+}
+function renderRcpt(){
+  const el = $('eRcpt');
+  if(eRc.busy){ el.innerHTML = `<p class="hint" style="margin:0 2px 12px">Loading the photo…</p>`; return; }
+  el.innerHTML = eRc.data
+    ? `<div class="rcpt"><button class="thumb" onclick="viewReceipt()" aria-label="See the receipt full size"><img src="${eRc.data}" alt=""></button>
+        <span class="rinfo"><b>Photo added</b>Tap it to see it full size</span>
+        <button class="linkbtn" onclick="pickReceipt()">Replace</button>
+        <button class="linkbtn" style="color:var(--coral)" onclick="removeReceipt()">Remove</button></div>`
+    : `<button class="btn soft" style="margin-bottom:6px" onclick="pickReceipt()">${ic('camera')}Add receipt photo</button>
+       <p class="hint" style="margin:0 2px 8px">Take a photo or pick one you already have. Keep the paper receipt too if you can.</p>`;
+}
+function pickReceipt(){ $('rcptIn').value = ''; $('rcptIn').click(); }
+$('rcptIn').addEventListener('change', async ev => {
+  const f = ev.target.files[0];
+  if(!f) return;
+  const mine = eRc;
+  mine.busy = true; renderRcpt();
+  try{ mine.data = await shrinkPhoto(f); mine.dirty = true; }
+  catch(e){ toast("Couldn't open that photo. Try taking a new one."); }
+  mine.busy = false;
+  if(eRc === mine) renderRcpt();
+});
+function removeReceipt(){ eRc.data = null; eRc.dirty = true; renderRcpt(); }
+function viewReceipt(){
+  if(!eRc.data) return;
+  $('rcptImg').src = eRc.data;
+  $('rcptView').classList.remove('zoom');
+  $('rcptView').scrollTop = 0;
+  show('rcptView');
+}
+function closeViewer(){ $('rcptView').classList.remove('show'); }
 
 /* ---------- trips ---------- */
 function setMode(m){
@@ -2058,11 +2184,13 @@ document.addEventListener('click', ev => {
   if(m){ const k = m.dataset.month; openMonths.has(k) ? openMonths.delete(k) : openMonths.add(k); renderMonths(); return; }
   const g = ev.target.closest('[data-goto]');
   if(g){ viewKey = g.dataset.goto; switchTab('home'); return; }
+  if(ev.target.id === 'rcptView'){ closeViewer(); return; }
   if(ev.target.id === 'guideSheet'){ closeGuide(); return; }
   if(ev.target.classList.contains('overlay')) closeSheets();
 });
 document.addEventListener('keydown', ev => {
-  if(ev.key === 'Escape') $('guideSheet').classList.contains('show') ? closeGuide() : closeSheets();
+  if(ev.key === 'Escape') $('rcptView').classList.contains('show') ? closeViewer()
+    : $('guideSheet').classList.contains('show') ? closeGuide() : closeSheets();
   if(ev.key === 'Enter' && ev.target.matches('.overlay input:not([type=date])')){
     ev.preventDefault();
     $('entrySheet').classList.contains('show') ? saveEntry()
@@ -2092,6 +2220,7 @@ document.querySelectorAll('[data-ic]').forEach(el => { el.outerHTML = ic(el.data
 load();
 openMonths.add(nowKey());
 renderAll();
+cleanReceipts();
 if('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
