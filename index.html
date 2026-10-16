@@ -700,6 +700,21 @@ function normalize(d){
   s.billAmts = ba;
   if(!s.monthGoals || typeof s.monthGoals !== 'object') s.monthGoals = {};
   if(!s.paid || typeof s.paid !== 'object') s.paid = {};
+  // First month you used the app (set once; older saves use the oldest entry or this month).
+  if(!/^\d{4}-\d{2}$/.test(s.firstMonth))
+    s.firstMonth = [nowKey(), ...s.entries.map(e => mk(e.ts)), ...s.trips.map(t => mk(t.ts))].sort()[0];
+  // One-time fix: older versions stamped past-month check-offs with the day
+  // you tapped. A closed month's bill checked off after the month it was due
+  // in moves back to its due date.
+  if(!s.paidDatesFixed){
+    Object.entries(s.paid).forEach(([k, m]) => Object.keys(m || {}).forEach(id => {
+      const b = s.bills.find(x => x.id === id);
+      if(!b || !/^\d{4}-\d{2}$/.test(k) || billOpen(b, k)) return;
+      const due = dueDate(b, k), endOfDueMonth = new Date(due.getFullYear(), due.getMonth() + 1, 1).getTime();
+      if(m[id] >= endOfDueMonth) m[id] = due.getTime();
+    }));
+    s.paidDatesFixed = true;
+  }
   delete s.theme;
   return s;
 }
@@ -761,9 +776,12 @@ function switchTab(t){
   renderAll();
   $('scroller').scrollTop = 0;
 }
+// The first month you used the app, or your oldest entry or trip if that's
+// earlier. The month arrows don't go back past it.
+function firstKey(){ return [S.firstMonth, ...S.entries.map(e => mk(e.ts)), ...S.trips.map(t => mk(t.ts))].sort()[0]; }
 function shiftMonth(n){
   const k = addMonths(viewKey, n);
-  if(k > nowKey()) return;
+  if(k > nowKey() || k < firstKey()) return;
   viewKey = k; renderAll();
 }
 function goNow(){ viewKey = nowKey(); renderAll(); }
@@ -778,6 +796,7 @@ function renderHeader(){
   $('ttl').textContent = {months:'Months', taxes:'Taxes'}[tab] || 'Settings';
   $('mLabel').textContent = monthName(viewKey);
   $('nextM').classList.toggle('invisible', viewKey >= nowKey());
+  $('prevM').classList.toggle('invisible', viewKey <= firstKey());
   const past = viewKey !== nowKey();
   $('viewH').hidden = !past; $('viewM').hidden = !past; $('viewB').hidden = !past;
   const st = computeStreak();
@@ -1032,7 +1051,7 @@ function billInfo(b, k){
   if(b.autopay) return days <= 0
     ? {paid:true, auto:true, cls:'due-paid', text:'Paid automatically ' + dueTxt}
     : {auto:true, cls:'', text:`Autopay ${dueTxt} · in ${days} day${days === 1 ? '' : 's'}`};
-  const stillOpen = k === nowKey() || (b.nextMonth && k === addMonths(nowKey(), -1));
+  const stillOpen = billOpen(b, k);
   if(days < 0 && !stillOpen) return {late:true, cls:'due-late', text:'Not marked paid · was due ' + dueTxt};
   if(days < 0) return {late:true, cls:'due-late', text:`Overdue ${-days} day${days === -1 ? '' : 's'} · was due ${dueTxt}`};
   if(days === 0) return {cls:'due-soon', text:'Due today'};
@@ -1082,6 +1101,11 @@ function askAlreadyPaid(b){
     S.paid[fk][b.id] = due.getTime();
   }
 }
+// A bill still being paid (this month's, or last month's "following month"
+// bill) is stamped paid today. Checking off an older month's bill records
+// it as paid on that month's due date instead.
+const billOpen = (b, k) => k === nowKey() || (b.nextMonth && k === addMonths(nowKey(), -1));
+const paidStamp = (b, k) => billOpen(b, k) ? Date.now() : Math.min(dueDate(b, k).getTime(), Date.now());
 function togglePaid(id, k){
   const b = S.bills.find(x => x.id === id);
   if(!b) return;
@@ -1090,7 +1114,7 @@ function togglePaid(id, k){
     delete S.paid[k][id];
     save(); renderAll(); toast(b.name + ' marked unpaid');
   } else {
-    S.paid[k][id] = Date.now();
+    S.paid[k][id] = paidStamp(b, k);
     save(); renderAll();
     toast(b.name + ' marked paid', () => { delete S.paid[k][id]; save(); renderAll(); });
   }
