@@ -157,6 +157,16 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .gitem+.gitem{border-top:1px solid var(--line)}
 .gitem b{display:block;font-weight:650}
 .gitem span{color:var(--muted);font-size:13px}
+.tax-hero{text-align:center;padding:20px 16px 18px}
+.tax-hero .ring-s{max-width:none}
+.qcard{background:var(--surface);border:1px solid var(--line);border-radius:18px;margin-bottom:10px;overflow:hidden}
+.qcard .brow{border-top:1px solid var(--line)}
+.qcard.future{opacity:.5}
+.qhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:12px 14px 8px;font-size:14.5px;font-weight:700}
+.qhead span{font-size:12.5px;font-weight:600;color:var(--muted);text-align:right}
+.kv.total{font-weight:700;border-top:1px solid var(--line);margin-top:6px;padding-top:9px}
+.kv.total span:first-child{color:var(--text)}
+.kv.sep{border-top:1px solid var(--line);margin-top:6px;padding-top:9px}
 
 .mcard{background:var(--surface);border:1px solid var(--line);border-radius:20px;margin-bottom:10px;overflow:hidden}
 .mhead{display:flex;align-items:center;gap:10px;width:100%;padding:14px 16px 12px}
@@ -270,6 +280,21 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
     <button class="btn primary" style="margin-top:14px" onclick="openBill()"><i data-ic="plus"></i>Add a bill</button>
   </section>
 
+  <!-- TAXES -->
+  <section class="screen" id="s-taxes">
+    <div id="taxYears"></div>
+    <div id="taxTop"></div>
+    <div id="taxEst"></div>
+    <div class="sec" style="margin-top:6px"><span>Quarterly payments</span><span id="taxQNote"></span></div>
+    <div id="taxQuarters" style="margin-top:8px"></div>
+    <div class="group">
+      <h3>How to pay</h3>
+      <p class="hint" style="margin-top:0"><b>IRS:</b> search "IRS Direct Pay". Choose <b>Estimated Tax</b>, then <b>1040ES</b>, and the tax year. Save the confirmation number it gives you.</p>
+      <p class="hint"><b>Kansas:</b> pay on the Kansas Department of Revenue website as <b>estimated tax (K-40ES)</b>. Same due dates as the IRS.</p>
+      <p class="hint">These are estimates for self-employed work (Detailing and DoorDash income), for a single person in Kansas. For your tax return, the free VITA tax help can check them.</p>
+    </div>
+  </section>
+
   <!-- MONTHS -->
   <section class="screen" id="s-months">
     <div id="yearCard"></div>
@@ -346,6 +371,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 <nav class="nav"><div class="nav-in">
   <button class="nb active" data-tab="home" onclick="switchTab('home')"><i data-ic="home"></i>Home</button>
   <button class="nb" data-tab="bills" onclick="switchTab('bills')"><i data-ic="receipt"></i>Bills</button>
+  <button class="nb" data-tab="taxes" onclick="switchTab('taxes')"><i data-ic="percent"></i>Taxes</button>
   <button class="nb" data-tab="months" onclick="switchTab('months')"><i data-ic="chart"></i>Months</button>
   <button class="nb" data-tab="miles" onclick="switchTab('miles')"><i data-ic="road"></i>Miles</button>
   <button class="nb" data-tab="settings" onclick="switchTab('settings')"><i data-ic="sliders"></i>Settings</button>
@@ -450,6 +476,25 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
   </div>
 </div>
 
+<!-- Tax payment sheet -->
+<div class="overlay" id="paySheet">
+  <div class="sheet" role="dialog" aria-labelledby="pTitle">
+    <div class="grab"></div>
+    <h3 id="pTitle">Record a payment</h3>
+    <div class="flabel">Amount you paid</div>
+    <div class="money"><span>$</span><input id="pAmt" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+    <div class="flabel">Date paid</div>
+    <input class="inp" type="date" id="pDate">
+    <input class="inp" id="pConf" placeholder="Confirmation number (optional)" autocomplete="off">
+    <p class="hint" id="pHint" style="margin:-4px 2px 14px"></p>
+    <div class="actions">
+      <button class="btn soft" onclick="closeSheets()">Cancel</button>
+      <button class="btn primary" onclick="savePayment()">Save</button>
+    </div>
+    <button class="btn danger" id="pDel" onclick="deletePayment()">Delete payment</button>
+  </div>
+</div>
+
 <!-- What counts as a work tool (opens on top of the entry sheet) -->
 <div class="overlay" id="guideSheet" style="z-index:60">
   <div class="sheet" role="dialog" aria-labelledby="gTitle">
@@ -511,6 +556,7 @@ const ICONS = {
   upload:'<path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/>',
   receipt:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  percent:'<path d="M18.5 5.5l-13 13"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/>',
   auto:'<path d="M19.5 11A7.5 7.5 0 0 0 6 6.5"/><path d="M5 3.5v3.5h3.5"/><path d="M4.5 13A7.5 7.5 0 0 0 18 17.5"/><path d="M19 20.5V17h-3.5"/>'
 };
 const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -567,7 +613,7 @@ function cleanNum(el){
 /* ---------- saving and loading ---------- */
 function defaults(){
   return {version:1, entries:[], trips:[], bills:[], paid:{}, goal:660, monthGoals:{}, mileageRate:0.70,
-          weeklyPay:600, commissionRate:25, lastOdometer:null, lastIncomeCat:'DoorDash', lastBackup:null, backupSnooze:null, lastBillNext:false};
+          weeklyPay:600, commissionRate:25, taxPayments:[], lastOdometer:null, lastIncomeCat:'DoorDash', lastBackup:null, backupSnooze:null, lastBillNext:false};
 }
 function normalize(d){
   const s = {...defaults(), ...d};
@@ -587,6 +633,9 @@ function normalize(d){
     .filter(b => b && b.name && isFinite(b.amount))
     .map(b => ({id: b.id || uid(), name: String(b.name), amount: +b.amount,
                 dueDay: Math.min(Math.max(parseInt(b.dueDay) || 1, 1), 31), nextMonth: !!b.nextMonth, autopay: !!b.autopay}));
+  s.taxPayments = (Array.isArray(s.taxPayments) ? s.taxPayments : [])
+    .filter(p => p && isFinite(p.amount) && isFinite(p.ts) && p.q >= 1 && p.q <= 4 && (p.who === 'irs' || p.who === 'ks'))
+    .map(p => ({id: p.id || uid(), year: +p.year, q: +p.q, who: p.who, amount: +p.amount, ts: +p.ts, conf: p.conf || ''}));
   if(!s.monthGoals || typeof s.monthGoals !== 'object') s.monthGoals = {};
   if(!s.paid || typeof s.paid !== 'object') s.paid = {};
   delete s.theme;
@@ -658,13 +707,13 @@ function shiftMonth(n){
 function goNow(){ viewKey = nowKey(); renderAll(); }
 
 /* ---------- rendering ---------- */
-function renderAll(){ renderHeader(); renderHome(); renderBills(); renderMiles(); renderMonths(); renderSettings(); }
+function renderAll(){ renderHeader(); renderHome(); renderBills(); renderTaxes(); renderMiles(); renderMonths(); renderSettings(); }
 
 function renderHeader(){
   const monthTab = tab === 'home' || tab === 'bills' || tab === 'miles';
   $('mnav').hidden = !monthTab;
   $('ttl').hidden = monthTab;
-  $('ttl').textContent = tab === 'months' ? 'Months' : 'Settings';
+  $('ttl').textContent = {months:'Months', taxes:'Taxes'}[tab] || 'Settings';
   $('mLabel').textContent = monthName(viewKey);
   $('nextM').classList.toggle('invisible', viewKey >= nowKey());
   const past = viewKey !== nowKey();
@@ -991,6 +1040,184 @@ function updBillHint(){
   $('bHint').textContent = `${mon}'s bill is due ${shortDay(dueDate({dueDay: Math.min(Math.max(day, 1), 31), nextMonth: bNext}, k))}.`;
 }
 
+/* ---------- taxes ---------- */
+// Estimates for a single self-employed person in Kansas. Add next year's
+// numbers here when the IRS and Kansas publish them; until then the newest
+// year's rules are used.
+const TAX_RULES = {
+  2026: {std:16100, ssBase:184500,
+         brackets:[[12400,.10],[50400,.12],[105700,.22],[201775,.24],[256225,.32],[640600,.35],[Infinity,.37]],
+         ksStd:3605, ksExempt:9160, ksBrackets:[[23000,.052],[Infinity,.0558]]}
+};
+const SE_CATS = ['Detailing','DoorDash'];   // income that counts as self-employment
+const QUARTERS = [ // [label, months covered, period end (month index), due date (year offset, month index)]
+  ['Q1', 'Jan–Mar', 3, 0, 3], ['Q2', 'Apr–May', 5, 0, 5], ['Q3', 'Jun–Aug', 8, 0, 8], ['Q4', 'Sep–Dec', 12, 1, 0]
+];
+const WHO = {irs:'IRS', ks:'Kansas'};
+let taxYear = new Date().getFullYear();
+let payCtx = null;   // {y, q, who, id?} while the payment sheet is open
+
+function rulesFor(y){ return TAX_RULES[y] || TAX_RULES[Math.max(...Object.keys(TAX_RULES).map(Number))]; }
+function bracketTax(x, br){ let t = 0, lo = 0; for(const [hi, r] of br){ if(x > lo) t += (Math.min(x, hi) - lo) * r; lo = hi; } return t; }
+// Tax on a year's self-employment profit: Social Security & Medicare (SE tax),
+// federal income tax (after the standard and 20% business deductions) and Kansas.
+function taxFor(profit, y){
+  const R = rulesFor(y), p = Math.max(profit, 0);
+  const base = p * 0.9235;
+  const se = base < 400 ? 0 : Math.min(base, R.ssBase) * 0.124 + base * 0.029;
+  const agi = p - se / 2;
+  const before = Math.max(agi - R.std, 0);
+  const income = bracketTax(before - Math.min(0.2 * agi, 0.2 * before), R.brackets);
+  const ks = bracketTax(Math.max(agi - R.ksStd - R.ksExempt, 0), R.ksBrackets);
+  return {se, income, fed: se + income, ks, total: se + income + ks};
+}
+// Business income, work tools and work miles for year y, up to (not including) endTs.
+function bizNumbers(y, endTs){
+  const inY = ts => new Date(ts).getFullYear() === y && (endTs == null || ts < endTs);
+  const income = sum(S.entries.filter(e => e.type === 'income' && SE_CATS.includes(e.category) && inY(e.ts)), 'amount');
+  const tools = sum(S.entries.filter(e => e.taxKind && inY(e.ts)), 'amount');
+  const miles = sum(S.trips.filter(t => inY(t.ts)), 'miles');
+  const mileDed = miles * S.mileageRate;
+  return {income, tools, miles, mileDed, profit: Math.max(income - tools - mileDed, 0)};
+}
+// Share of each paycheck to set aside: the full-year tax rate at your weekly pay.
+function taxRate(y){ const yr = S.weeklyPay * 52; return yr > 0 ? taxFor(yr, y).total / yr : 0.2; }
+function bizDay(d){ while(d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1); return d; }
+// Each quarter's share of the tax: tax on everything earned through the end of
+// the quarter, minus tax on everything earned before it.
+function quarterInfo(y){
+  let prev = {fed:0, ks:0};
+  const now = Date.now();
+  return QUARTERS.map(([label, months, endM, dy, dm], i) => {
+    const start = new Date(y, i ? QUARTERS[i-1][2] : 0, 1).getTime();
+    const end = new Date(y, endM, 1).getTime();
+    const t = taxFor(bizNumbers(y, Math.min(end, now + 1)).profit, y);
+    const q = {n: i + 1, label, months, start, end, due: bizDay(new Date(y + dy, dm, 15)),
+               fed: Math.max(t.fed - prev.fed, 0), ks: Math.max(t.ks - prev.ks, 0),
+               future: now < start, open: now >= start && now < end};
+    prev = t;
+    return q;
+  });
+}
+const paymentsFor = (y, q, who) => S.taxPayments.filter(p => p.year === y && (q == null || p.q === q) && (who == null || p.who === who));
+function weekStart(){ const d = startOfToday(); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return d.getTime(); }
+
+function renderTaxes(){
+  const cy = new Date().getFullYear();
+  const years = new Set([cy]);
+  S.entries.forEach(e => { if(e.type === 'income' && SE_CATS.includes(e.category)) years.add(new Date(e.ts).getFullYear()); });
+  S.taxPayments.forEach(p => years.add(p.year));
+  const ys = [...years].filter(y => y <= cy).sort().slice(-3);
+  if(!ys.includes(taxYear)) taxYear = cy;
+  const y = taxYear;
+  $('taxYears').innerHTML = ys.length > 1
+    ? `<div class="seg">${ys.map(v => `<button class="${v === y ? 'on' : ''}" data-tyear="${v}">${v}</button>`).join('')}</div>` : '';
+
+  const rate = taxRate(y);
+  const b = bizNumbers(y);
+  const t = taxFor(b.profit, y);
+  const paid = sum(paymentsFor(y), 'amount');
+  const shouldSave = b.income * rate;
+
+  // Top card: this week (current year) or the year's total (past years).
+  let hero;
+  if(y === cy){
+    const wk = sum(S.entries.filter(e => e.type === 'income' && SE_CATS.includes(e.category) && e.ts >= weekStart()), 'amount');
+    hero = `<div class="ring-l">Set aside from this week's pay</div>
+      <div class="ring-n">${fmt(wk * rate)}</div>
+      <div class="ring-s">${wk ? `About ${Math.round(rate * 100)}% of the ${fmt(wk)} you earned this week` : `About ${Math.round(rate * 100)}% of what you earn. Log your pay and this fills in.`}</div>`;
+  } else {
+    hero = `<div class="ring-l">${y} tax estimate</div><div class="ring-n">${fmt(t.total)}</div>
+      <div class="ring-s">${fmt(paid)} paid · ${fmt(Math.max(t.total - paid, 0))} left to pay</div>`;
+  }
+  $('taxTop').innerHTML = `<div class="card tax-hero">${hero}</div>
+    <div class="stats two">
+      <div class="stat"><div class="v mi">${fmt(Math.max(shouldSave - paid, 0))}</div><div class="l">should be in your tax jar</div></div>
+      <div class="stat"><div class="v inc">${fmt(paid)}</div><div class="l">paid for ${y}</div></div>
+    </div>`;
+
+  $('taxEst').innerHTML = `<div class="group"><h3>${y} so far</h3>
+    <div class="kv"><span>Detailing &amp; DoorDash income</span><span>${fmt(b.income)}</span></div>
+    ${b.tools ? `<div class="kv"><span>Work tools</span><span>−${fmt(b.tools)}</span></div>` : ''}
+    ${b.miles ? `<div class="kv"><span>Work miles (${miles1(b.miles)} mi)</span><span>−${fmt(b.mileDed)}</span></div>` : ''}
+    <div class="kv"><span>Profit (what you're taxed on)</span><span>${fmt(b.profit)}</span></div>
+    <div class="kv sep"><span>Federal: Social Security &amp; Medicare</span><span>${fmt(t.se)}</span></div>
+    <div class="kv"><span>Federal: income tax</span><span>${fmt(t.income)}</span></div>
+    <div class="kv"><span>Kansas</span><span>${fmt(t.ks)}</span></div>
+    <div class="kv total"><span>Estimated tax</span><span>${fmt(t.total)}</span></div>
+    <div class="kv"><span>Paid so far</span><span>${fmt(paid)}</span></div>
+    <div class="kv"><span>Still to pay</span><span>${fmt(Math.max(t.total - paid, 0))}</span></div>
+    <p class="hint">${y === cy ? `If ${y} ended today. It grows as you earn.` : `Based on everything logged for ${y}.`}${TAX_RULES[y] ? '' : ` Using ${Math.max(...Object.keys(TAX_RULES))} tax rules until ${y}'s are added.`}</p>
+    ${t.fed < 1000 ? `<p class="hint">Federal tax is under $1,000 so far, so there's no penalty if you skip quarterly payments. You'd pay it when you file instead.</p>` : ''}</div>`;
+
+  const qs = quarterInfo(y);
+  $('taxQNote').textContent = 'tap ✓ when you pay';
+  $('taxQuarters').innerHTML = qs.map(q => {
+    const allPaid = ['irs','ks'].every(w => paymentsFor(y, q.n, w).length || (!q.open && !q.future && (w === 'irs' ? q.fed : q.ks) < 1));
+    const days = Math.round((q.due - startOfToday()) / 864e5);
+    const status = q.future ? `Starts ${shortDay(new Date(q.start))}`
+      : allPaid ? `Done · was due ${shortDay(q.due)}`
+      : days < 0 ? `<span class="due-late">Was due ${shortDay(q.due)}</span>`
+      : days === 0 ? `<span class="due-soon">Due today</span>`
+      : `<span class="${days <= 14 ? 'due-soon' : ''}">Due ${q.due.toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'})} · in ${days} day${days === 1 ? '' : 's'}</span>`;
+    const rowFor = w => {
+      const owed = w === 'irs' ? q.fed : q.ks;
+      const ps = paymentsFor(y, q.n, w), p = ps[0];
+      const pAmt = sum(ps, 'amount');
+      const sub = p ? `Paid ${fmt2(pAmt)} on ${shortDay(new Date(p.ts))}${p.conf ? ' · #' + p.conf : ''}`
+        : q.future ? 'Nothing yet'
+        : q.open ? (owed < 1 ? 'Nothing owed so far' : 'So far') + ' · grows until ' + shortDay(new Date(q.end - 864e5))
+        : owed < 1 ? 'Nothing owed'
+        : 'Suggested payment';
+      return `<div class="brow ${p ? 'paid' : ''}">
+        <button class="check ${p ? 'on' : ''}" data-tpay="${q.n}:${w}" aria-label="Record ${WHO[w]} payment for ${q.label}">${ic('check')}</button>
+        <button class="row" data-tpay="${q.n}:${w}"><span class="rt"><span class="r1">${WHO[w]}</span><span class="r2">${esc(sub)}</span></span>
+        <span class="amt">${p ? fmt2(pAmt) : fmt(Math.ceil(owed))}</span></button></div>`;
+    };
+    return `<div class="qcard ${q.future ? 'future' : ''}"><div class="qhead">${q.label} · ${q.months}<span>${status}</span></div>${rowFor('irs')}${rowFor('ks')}</div>`;
+  }).join('');
+}
+
+function openPayment(q, who){
+  const y = taxYear, p = paymentsFor(y, q, who)[0];
+  const info = quarterInfo(y)[q - 1];
+  payCtx = {y, q, who, id: p ? p.id : null};
+  editing = p ? {kind:'p', id: p.id} : null;
+  $('pTitle').textContent = `${WHO[who]} payment · ${QUARTERS[q-1][0]} ${y}`;
+  const owed = who === 'irs' ? info.fed : info.ks;
+  $('pAmt').value = p ? String(p.amount) : (owed >= 1 ? String(Math.ceil(owed)) : '');
+  $('pDate').value = p ? dateStr(p.ts) : dateStr(Date.now());
+  $('pDate').max = dateStr(Date.now());
+  $('pConf').value = p ? p.conf : '';
+  $('pHint').textContent = who === 'irs'
+    ? `IRS Direct Pay: Estimated Tax → 1040ES → ${y}.`
+    : `Kansas Department of Revenue: estimated tax (K-40ES) for ${y}.`;
+  $('pDel').hidden = !p;
+  show('paySheet');
+  if(!p) $('pAmt').focus({preventScroll:true});
+}
+function savePayment(){
+  if(!payCtx) return;
+  const amount = Math.round(parseFloat($('pAmt').value) * 100) / 100;
+  if(!(amount > 0)){ toast('Enter the amount you paid'); $('pAmt').focus(); return; }
+  const {y, q, who, id} = payCtx;
+  const conf = $('pConf').value.trim();
+  if(id){ const p = S.taxPayments.find(x => x.id === id); Object.assign(p, {amount, conf, ts: tsFromDate($('pDate').value, p.ts)}); }
+  else S.taxPayments.push({id: uid(), year: y, q, who, amount, conf, ts: tsFromDate($('pDate').value)});
+  payCtx = null;
+  save(); closeSheets(); renderAll();
+  toast(id ? 'Payment updated' : `${WHO[who]} payment of ${fmt2(amount)} saved`);
+}
+function deletePayment(){
+  if(!payCtx || !payCtx.id) return;
+  const idx = S.taxPayments.findIndex(x => x.id === payCtx.id);
+  if(idx < 0) return;
+  const [item] = S.taxPayments.splice(idx, 1);
+  payCtx = null;
+  save(); closeSheets(); renderAll();
+  toast('Payment deleted', () => { S.taxPayments.push(item); save(); renderAll(); toast('Restored'); });
+}
+
 /* ---------- backup, restore and import ---------- */
 function renderNag(){
   const el = $('nag'), now = Date.now(), day = 864e5;
@@ -1242,7 +1469,8 @@ function saveEntry(){
   save(); closeSheets(); renderAll();
   const where = mk(e.ts) !== viewKey ? ' to ' + monthName(mk(e.ts)) : '';
   if(wasEditing) toast('Changes saved' + (where ? ', moved' + where : ''));
-  else toast((eType === 'income' ? 'Added ' : 'Logged ') + fmt2(amount) + where);
+  else toast((eType === 'income' ? 'Added ' : 'Logged ') + fmt2(amount) + where +
+    (eType === 'income' && SE_CATS.includes(category) ? ' · set aside ' + fmt(amount * taxRate(new Date(e.ts).getFullYear())) + ' for taxes' : ''));
   if(before > 0 && monthData(nowKey()).left <= 0) celebrate();
 }
 
@@ -1376,6 +1604,10 @@ document.addEventListener('click', ev => {
   if(p){ togglePaid(p.dataset.paid, viewKey); return; }
   const c = ev.target.closest('[data-cat]');
   if(c){ eCat = eCat === c.dataset.cat ? null : c.dataset.cat; setType(eType, true); fillDet(); return; }
+  const tp = ev.target.closest('[data-tpay]');
+  if(tp){ const [q, w] = tp.dataset.tpay.split(':'); openPayment(+q, w); return; }
+  const ty = ev.target.closest('[data-tyear]');
+  if(ty){ taxYear = +ty.dataset.tyear; renderTaxes(); return; }
   const dt = ev.target.closest('[data-det]');
   if(dt){ setDet(dt.dataset.det); return; }
   const cr = ev.target.closest('[data-cars]');
@@ -1394,10 +1626,11 @@ document.addEventListener('keydown', ev => {
   if(ev.key === 'Enter' && ev.target.matches('.overlay input:not([type=date])')){
     ev.preventDefault();
     $('entrySheet').classList.contains('show') ? saveEntry()
-      : $('billSheet').classList.contains('show') ? saveBill() : saveTrip();
+      : $('billSheet').classList.contains('show') ? saveBill()
+      : $('paySheet').classList.contains('show') ? savePayment() : saveTrip();
   }
 });
-['eAmt','tMiles','tStart','tEnd','goalIn','rateIn','payIn','commIn','bAmt','bDay'].forEach(id => $(id).addEventListener('input', ev => cleanNum(ev.target)));
+['eAmt','tMiles','tStart','tEnd','goalIn','rateIn','payIn','commIn','bAmt','bDay','pAmt'].forEach(id => $(id).addEventListener('input', ev => cleanNum(ev.target)));
 $('eAmt').addEventListener('input', () => { eAuto = false; }); // you typed your own amount
 // When the app comes back after midnight or a new month, move to the new month.
 document.addEventListener('visibilitychange', () => {
