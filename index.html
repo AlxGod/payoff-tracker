@@ -1901,6 +1901,8 @@ function addRate(){
 }
 function removeRate(from){
   if(S.mileageRates.length < 2) return;
+  const r = S.mileageRates.find(x => x.from === from);
+  if(!r || !confirm(`Remove the ${fmtRate(r.rate)} a mile rate that starts ${longDay(new Date(from + 'T12:00').getTime())}?\n\nTrips from that date would use the rate before it instead.`)) return;
   const prev = S.mileageRates;
   S.mileageRates = prev.filter(r => r.from !== from);
   save(); renderAll();
