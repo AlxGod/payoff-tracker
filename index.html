@@ -66,6 +66,10 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .ring circle{fill:none;stroke-width:15;stroke-linecap:round}
 .ring .trk{stroke:var(--surface-2)}
 .ring .fil{stroke:var(--amber);transition:stroke-dashoffset .7s cubic-bezier(.2,.8,.2,1),stroke .3s}
+.ring svg{transition:filter .4s}
+.ring.glow svg{filter:drop-shadow(0 0 10px rgba(255,201,74,.55))}
+.pill.blue{background:rgba(111,168,255,.15);color:#7FB2FF}
+.pill.gold{background:rgba(255,201,74,.16);color:#FFC94A}
 .ring-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
 .ring-l{font-size:13px;color:var(--muted);font-weight:500}
 .ring-n{font-family:var(--num);font-size:46px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.08}
@@ -255,7 +259,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
     <div id="nag"></div>
     <div class="card ring-card">
       <div class="ring">
-        <svg viewBox="0 0 200 200"><circle class="trk" cx="100" cy="100" r="86"/><circle class="fil" id="ringFill" cx="100" cy="100" r="86"/></svg>
+        <svg viewBox="0 0 200 200"><circle class="trk" cx="100" cy="100" r="86"/><circle class="fil" id="ringFill" cx="100" cy="100" r="86"/><circle class="fil" id="ringBonus" cx="100" cy="100" r="86"/></svg>
         <div class="ring-c"><div class="ring-l" id="ringL"></div><div class="ring-n" id="ringN"></div><div class="ring-s" id="ringS"></div></div>
       </div>
       <div class="pace" id="pace"></div>
@@ -330,15 +334,9 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
         <label for="rateIn">Mileage deduction rate ($ per mile)</label>
         <input class="inp" id="rateIn" inputmode="decimal" placeholder="0.70">
       </div>
-      <div class="pair">
-        <div class="field">
-          <label for="payIn">Weekly detailing pay ($)</label>
-          <input class="inp" id="payIn" inputmode="decimal" placeholder="600">
-        </div>
-        <div class="field">
-          <label for="commIn">Commission per car ($)</label>
-          <input class="inp" id="commIn" inputmode="decimal" placeholder="25">
-        </div>
+      <div class="field">
+        <label for="commIn">Detailing commission per car ($)</label>
+        <input class="inp" id="commIn" inputmode="decimal" placeholder="25">
       </div>
       <button class="btn primary" onclick="saveSettings()">Save</button>
       <p class="hint">A new goal applies to this month and future months. Past months keep the goal they had. The IRS sets a new mileage rate every January.</p>
@@ -397,6 +395,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
         <button data-det="pay">Weekly pay</button>
         <button data-det="commission">Commission</button>
       </div>
+      <p class="hint" id="ePayHint" style="margin:-6px 2px 14px">Type what you actually got paid this week.</p>
       <div id="eCarsWrap" hidden>
         <div class="flabel">Cars sold</div>
         <div class="stepper"><button data-cars="-1" aria-label="One less car">−</button><span id="eCars">1</span><button data-cars="1" aria-label="One more car">+</button></div>
@@ -629,7 +628,7 @@ function cleanNum(el){
 /* ---------- saving and loading ---------- */
 function defaults(){
   return {version:1, entries:[], trips:[], bills:[], paid:{}, goal:660, monthGoals:{}, mileageRate:0.70,
-          weeklyPay:600, commissionRate:25, taxPayments:[], lastOdometer:null, lastIncomeCat:'DoorDash', lastBackup:null, backupSnooze:null, lastBillNext:false};
+          commissionRate:25, taxPayments:[], lastOdometer:null, lastIncomeCat:'DoorDash', lastBackup:null, backupSnooze:null, lastBillNext:false};
 }
 function normalize(d){
   const s = {...defaults(), ...d};
@@ -711,7 +710,7 @@ function switchTab(t){
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 's-' + t));
   document.querySelectorAll('.nb').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
   if(t === 'settings'){ $('goalIn').value = goalFor(nowKey()); $('rateIn').value = S.mileageRate;
-                        $('payIn').value = S.weeklyPay; $('commIn').value = S.commissionRate; }
+                        $('commIn').value = S.commissionRate; }
   renderAll();
   $('scroller').scrollTop = 0;
 }
@@ -740,23 +739,47 @@ function renderHeader(){
   $('streak').title = 'Days in a row you earned money';
 }
 
+// Ring colors: red → green while covering the month, blue the moment it's
+// covered. Extra money draws "bonus laps": one lap = one more month of bills,
+// shifting blue → purple, and the ring turns gold for each full month ahead.
+const BLUE = 'hsl(215 85% 66%)', GOLD = '#FFC94A';
+function ringLook(d){
+  const frac = d.need > 0 ? Math.min(Math.max(d.earned / d.need, 0), 1) : 1;
+  if(d.left > 0) return {frac, color: `hsl(${Math.round(frac * 135)} 78% 60%)`, laps: 0, bonus: 0};
+  const laps = d.goal > 0 ? -d.left / d.goal : 0;
+  const whole = Math.floor(laps), part = laps - whole;
+  return whole >= 1
+    ? {frac: 1, color: GOLD, laps, whole, bonus: part, bonusColor: 'hsl(48 100% 82%)'}
+    : {frac: 1, color: BLUE, laps, whole, bonus: part, bonusColor: `hsl(${Math.round(222 + part * 58)} 88% 72%)`};
+}
+const monthsAhead = n => n + (n === 1 ? ' month' : ' months') + ' ahead';
+
 function renderHome(){
   const d = monthData(viewKey);
   const isNow = viewKey === nowKey();
   const covered = d.left <= 0;
-  const frac = d.need > 0 ? Math.min(Math.max(d.earned / d.need, 0), 1) : 1;
+  const look = ringLook(d);
   const C = 2 * Math.PI * 86;
-  const fill = $('ringFill');
+  const fill = $('ringFill'), bonus = $('ringBonus');
   fill.style.strokeDasharray = C;
-  fill.style.strokeDashoffset = C * (1 - frac);
-  fill.style.stroke = covered ? 'var(--teal)' : 'var(--amber)';
-  fill.style.opacity = frac === 0 ? 0 : 1;
+  fill.style.strokeDashoffset = C * (1 - look.frac);
+  fill.style.stroke = look.color;
+  fill.style.opacity = look.frac === 0 ? 0 : 1;
+  bonus.style.strokeDasharray = C;
+  bonus.style.strokeDashoffset = C * (1 - look.bonus);
+  bonus.style.stroke = look.bonusColor || 'transparent';
+  bonus.style.opacity = look.bonus > 0 ? 1 : 0;
+  document.querySelector('.ring').classList.toggle('glow', look.whole >= 1);
 
   if(covered){
-    $('ringL').textContent = d.left < 0 ? 'ahead of your goal' : 'goal reached';
-    $('ringN').textContent = fmt(-d.left);
-    $('ringN').style.color = 'var(--teal)';
-    $('ringS').textContent = fmt(d.goal) + ' in bills covered';
+    $('ringL').textContent = d.left < 0 ? 'extra this month' : 'goal reached';
+    $('ringN').textContent = (d.left < 0 ? '+' : '') + fmt(-d.left);
+    $('ringN').style.color = look.color;
+    const pct = Math.floor(look.bonus * 100);
+    $('ringS').textContent = !d.goal ? 'No bills set yet'
+      : look.whole >= 1 ? `${monthsAhead(look.whole)} · ${pct}% to the next`
+      : d.left < 0 ? `${pct}% to a bonus month of bills`
+      : fmt(d.goal) + ' in bills covered';
   } else {
     $('ringL').textContent = isNow ? 'left to cover' : 'came up short';
     $('ringN').textContent = fmt(d.left);
@@ -877,10 +900,11 @@ function renderMonths(){
     const d = monthData(k);
     const isNow = k === nk;
     const covered = d.left <= 0;
-    const pill = covered ? `<span class="pill ok">Covered</span>`
+    const look = ringLook(d);
+    const pill = look.whole >= 1 ? `<span class="pill gold">${monthsAhead(look.whole)}</span>`
+      : covered ? `<span class="pill blue">${d.left < 0 ? '+' + fmt(-d.left) + ' extra' : 'Covered'}</span>`
       : isNow ? `<span class="pill go">${fmt(d.left)} to go</span>`
       : `<span class="pill short">Short ${fmt(d.left)}</span>`;
-    const frac = d.need > 0 ? Math.min(d.earned / d.need, 1) : 1;
 
     const inc = {}, exp = {};
     d.entries.forEach(e => {
@@ -902,7 +926,7 @@ function renderMonths(){
         <div><div class="mt">${esc(monthName(k))}</div><div class="ms">Earned ${fmt(d.earned)} · Spent ${fmt(d.spent)}</div></div>
         ${pill}<span class="chev">${ic('down')}</span>
       </button>
-      <div class="bar ${covered ? 'ok' : ''}"><span style="width:${(frac*100).toFixed(1)}%"></span></div>
+      <div class="bar"><span style="width:${(look.frac*100).toFixed(1)}%;background:${look.color}"></span></div>
       <div class="mbody">${body || '<div class="empty" style="padding:16px 0 4px">Nothing logged this month.</div>'}
         <button class="btn soft" data-goto="${k}">See all entries</button></div>
     </div>`;
@@ -1096,8 +1120,20 @@ function bizNumbers(y, endTs){
   const mileDed = miles * S.mileageRate;
   return {income, tools, miles, mileDed, profit: Math.max(income - tools - mileDed, 0)};
 }
-// Share of each paycheck to set aside: the full-year tax rate at your weekly pay.
-function taxRate(y){ const yr = S.weeklyPay * 52; return yr > 0 ? taxFor(yr, y).total / yr : 0.2; }
+// Share of each paycheck to set aside: the full-year tax rate at your recent
+// pace (average weekly pay over the last 8 weeks you've been earning, × 52).
+// Past years use what you actually earned.
+function taxRate(y){
+  let yr;
+  if(y < new Date().getFullYear()) yr = bizNumbers(y).income;
+  else {
+    const now = Date.now(), wk = 7 * 864e5;
+    const se = S.entries.filter(e => e.type === 'income' && SE_CATS.includes(e.category) && e.ts <= now);
+    const from = Math.max(now - 8 * wk, Math.min(...se.map(e => e.ts)));
+    yr = sum(se.filter(e => e.ts >= from), 'amount') / Math.max((now - from) / wk, 1) * 52;
+  }
+  return yr > 0 ? taxFor(yr, y).total / yr : 0.2;
+}
 function bizDay(d){ while(d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1); return d; }
 // Each quarter's share of the tax: tax on everything earned through the end of
 // the quarter, minus tax on everything earned before it.
@@ -1550,20 +1586,20 @@ function updExtras(){
   if(isDet()){
     document.querySelectorAll('[data-det]').forEach(b => b.classList.toggle('on', b.dataset.det === eKind));
     $('eCarsWrap').hidden = eKind !== 'commission';
+    $('ePayHint').hidden = eKind !== 'pay';
     $('eCars').textContent = eCars;
     $('eCarsHint').textContent = `${eCars} × ${fmt2(S.commissionRate)} = ${fmt2(eCars * S.commissionRate)}`;
   } else if(eAuto){ $('eAmt').value = ''; eAuto = false; }
   if(isTool()) $('eToolChips').innerHTML = TOOL_KINDS.map(([k]) => `<button class="chip ${k === eTool ? 'on' : ''}" data-tool="${esc(k)}">${esc(k)}</button>`).join('');
 }
-// Fills in the weekly pay, or cars × commission, unless you typed your own amount.
+// Commission fills in cars × rate. Weekly pay changes week to week, so you
+// type it yourself (a commission amount left in the box gets cleared).
 function fillDet(){
   if(!isDet()) return;
-  if(eKind === 'commission' || eAuto || !$('eAmt').value){
-    $('eAmt').value = String(eKind === 'pay' ? S.weeklyPay : eCars * S.commissionRate);
-    eAuto = true;
-  }
+  if(eKind === 'commission'){ $('eAmt').value = String(eCars * S.commissionRate); eAuto = true; }
+  else if(eAuto){ $('eAmt').value = ''; eAuto = false; }
 }
-function setDet(k){ eKind = k; if(k === 'pay') eAuto = true; fillDet(); updExtras(); }
+function setDet(k){ eKind = k; fillDet(); updExtras(); }
 function stepCars(n){ eCars = Math.min(Math.max(eCars + n, 1), 99); fillDet(); updExtras(); }
 
 function openGuide(){
@@ -1581,7 +1617,7 @@ function saveEntry(){
   if(isTool() && !eTool){ toast('Pick what kind of work tool it is'); return; }
   const extra = {kind: isDet() ? eKind : null, cars: isDet() && eKind === 'commission' ? eCars : null,
                  taxKind: isTool() ? eTool : null};
-  const before = monthData(nowKey()).left;
+  const before = monthData(nowKey()).left, lapsBefore = ringLook(monthData(nowKey())).whole || 0;
   const wasEditing = !!editing;
   let e;
   if(editing){
@@ -1597,7 +1633,9 @@ function saveEntry(){
   if(wasEditing) toast('Changes saved' + (where ? ', moved' + where : ''));
   else toast((eType === 'income' ? 'Added ' : 'Logged ') + fmt2(amount) + where +
     (eType === 'income' && SE_CATS.includes(category) ? ' · set aside ' + fmt(amount * taxRate(new Date(e.ts).getFullYear())) + ' for taxes' : ''));
+  const lapsAfter = ringLook(monthData(nowKey())).whole || 0;
   if(before > 0 && monthData(nowKey()).left <= 0) celebrate();
+  else if(lapsAfter > lapsBefore) celebrate(`${monthsAhead(lapsAfter)} on bills 🎉`);
 }
 
 /* ---------- trips ---------- */
@@ -1673,10 +1711,9 @@ function deleteItem(kind){
 /* ---------- settings ---------- */
 function saveSettings(){
   const g = parseFloat($('goalIn').value), r = parseFloat($('rateIn').value);
-  const p = parseFloat($('payIn').value), c = parseFloat($('commIn').value);
+  const c = parseFloat($('commIn').value);
   if(!S.bills.length && isFinite(g) && g >= 0){ S.goal = g; S.monthGoals[nowKey()] = g; }
   if(isFinite(r) && r > 0) S.mileageRate = r;
-  if(isFinite(p) && p > 0) S.weeklyPay = p;
   if(isFinite(c) && c > 0) S.commissionRate = c;
   save(); renderAll(); toast('Settings saved');
 }
@@ -1707,7 +1744,7 @@ function toast(msg, undo){
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), undo ? 5000 : 2200);
 }
-function celebrate(){
+function celebrate(msg){
   const colors = ['var(--amber)','var(--teal)','var(--coral)','#8FA4FF'];
   for(let i = 0; i < 36; i++){
     const el = document.createElement('div');
@@ -1719,7 +1756,7 @@ function celebrate(){
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 4000);
   }
-  setTimeout(() => toast("You've covered this month's bills 🎉"), 400);
+  setTimeout(() => toast(msg || "You've covered this month's bills 🎉"), 400);
 }
 
 /* ---------- wiring ---------- */
@@ -1756,7 +1793,7 @@ document.addEventListener('keydown', ev => {
       : $('paySheet').classList.contains('show') ? savePayment() : saveTrip();
   }
 });
-['eAmt','tMiles','tStart','tEnd','goalIn','rateIn','payIn','commIn','bAmt','bDay','pAmt'].forEach(id => $(id).addEventListener('input', ev => cleanNum(ev.target)));
+['eAmt','tMiles','tStart','tEnd','goalIn','rateIn','commIn','bAmt','bDay','pAmt'].forEach(id => $(id).addEventListener('input', ev => cleanNum(ev.target)));
 $('eAmt').addEventListener('input', () => { eAuto = false; }); // you typed your own amount
 // When the app comes back after midnight or a new month, move to the new month.
 document.addEventListener('visibilitychange', () => {
