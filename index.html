@@ -1633,13 +1633,14 @@ function renderNag(){
 }
 function snoozeBackup(){ S.backupSnooze = Date.now(); save(); renderNag(); }
 // Phones get the share sheet (Save to Files); computers get a normal download.
+// Only the file is shared: on iPhone, adding a title saves it as a second item.
 async function saveFile(name, text, type){
   const blob = new Blob([text], {type});
   const touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
   if(touch && navigator.canShare){
     const file = new File([blob], name, {type});
     if(navigator.canShare({files:[file]})){
-      try{ await navigator.share({files:[file], title:name}); return true; }
+      try{ await navigator.share({files:[file]}); return true; }
       catch(e){ if(e.name === 'AbortError') return false; }
     }
   }
