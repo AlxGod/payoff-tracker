@@ -492,6 +492,15 @@ a.row .ext{color:var(--faint)}
       <button data-bauto="1" onclick="setBillAuto(true)">Autopay</button>
     </div>
     <p class="hint" style="margin:0 2px 14px">Autopay bills check themselves off on their due date.</p>
+    <div class="flabel">First month</div>
+    <input class="inp" type="month" id="bStart">
+    <div class="flabel">Still paying it?</div>
+    <div class="seg" style="margin-bottom:6px">
+      <button data-bend="0">Still paying</button>
+      <button data-bend="1">Ended</button>
+    </div>
+    <div id="bEndWrap" hidden style="margin-top:8px"><div class="flabel">Last month you paid it</div><input class="inp" type="month" id="bEnd"></div>
+    <p class="hint" style="margin:0 2px 14px">The bill only shows and counts in these months. Leave First month blank if you've always had it.</p>
     <div class="actions">
       <button class="btn soft" onclick="closeSheets()">Cancel</button>
       <button class="btn primary" onclick="saveBill()">Save</button>
@@ -681,7 +690,10 @@ function normalize(d){
   s.bills = (Array.isArray(s.bills) ? s.bills : [])
     .filter(b => b && b.name && isFinite(b.amount))
     .map(b => ({id: b.id || uid(), name: String(b.name), amount: +b.amount,
-                dueDay: Math.min(Math.max(parseInt(b.dueDay) || 1, 1), 31), nextMonth: !!b.nextMonth, autopay: !!b.autopay}));
+                dueDay: Math.min(Math.max(parseInt(b.dueDay) || 1, 1), 31), nextMonth: !!b.nextMonth, autopay: !!b.autopay,
+                // First and last month the bill applies to ("YYYY-MM"); null = no limit.
+                start: /^\d{4}-\d{2}$/.test(b.start) ? b.start : null,
+                end: /^\d{4}-\d{2}$/.test(b.end) ? b.end : null}));
   s.taxPayments = (Array.isArray(s.taxPayments) ? s.taxPayments : [])
     .filter(p => p && isFinite(p.amount) && isFinite(p.ts) && p.q >= 1 && p.q <= 4 && (p.who === 'irs' || p.who === 'ks'))
     .map(p => ({id: p.id || uid(), year: +p.year, q: +p.q, who: p.who, amount: +p.amount, ts: +p.ts, conf: p.conf || ''}));
@@ -746,7 +758,9 @@ function save(){
 }
 
 /* ---------- numbers for a month ---------- */
-function goalFor(k){ return S.monthGoals[k] ?? S.goal; }
+// With bills, a month's goal is its active bills' total. Without bills, it's
+// the goal you typed in Settings (each month keeps the goal it had).
+function goalFor(k){ return S.bills.length ? round2(monthBillsTotal(k)) : (S.monthGoals[k] ?? S.goal); }
 function monthData(k){
   const entries = S.entries.filter(e => mk(e.ts) === k);
   const trips = S.trips.filter(t => mk(t.ts) === k);
@@ -1006,27 +1020,36 @@ function renderSettings(){
   const hasBills = S.bills.length > 0;
   $('goalField').hidden = hasBills;
   $('goalFromBills').hidden = !hasBills;
-  $('goalFromBills').innerHTML = hasBills ? `Your monthly goal is your bills total, <b>${fmt2(billsTotal())}</b>. Change it on the Bills tab.` : '';
+  $('goalFromBills').innerHTML = hasBills ? `Your monthly goal is this month's bills total, <b>${fmt2(goalFor(nowKey()))}</b>. Change it on the Bills tab.` : '';
   $('backupInfo').textContent = S.lastBackup
     ? 'Last backup: ' + new Date(S.lastBackup).toLocaleDateString(undefined, {month:'long', day:'numeric', year:'numeric'})
     : "You haven't made a backup yet.";
 }
 
 /* ---------- bills ---------- */
-const billsTotal = () => sum(S.bills, 'amount');
+// A bill only counts in the months from its first month to its last (if it ended).
+const billActive = (b, k) => (!b.start || k >= b.start) && (!b.end || k <= b.end);
+const activeBills = k => S.bills.filter(b => billActive(b, k));
 // What a bill is for month k: a one-month amount if you set one, else its usual amount.
 const amountFor = (b, k) => S.billAmts[k] && S.billAmts[k][b.id] != null ? S.billAmts[k][b.id] : b.amount;
-const monthBillsTotal = k => S.bills.reduce((a, b) => a + amountFor(b, k), 0);
+// With bills listed, each month's goal is the total of the bills active that month.
+const monthBillsTotal = k => activeBills(k).reduce((a, b) => a + amountFor(b, k), 0);
 const round2 = n => Math.round(n * 100) / 100;
-// Sets month k's amount for bill b and moves that month's goal by the difference.
 function setMonthAmount(b, k, amt){
-  const old = amountFor(b, k);
   S.billAmts[k] = S.billAmts[k] || {};
   if(Math.abs(amt - b.amount) < 0.005) delete S.billAmts[k][b.id]; else S.billAmts[k][b.id] = amt;
   if(!Object.keys(S.billAmts[k]).length) delete S.billAmts[k];
-  S.monthGoals[k] = round2(goalFor(k) + amountFor(b, k) - old);
 }
-const sortedBills = k => [...S.bills].sort((a,b) => dueDate(a, k) - dueDate(b, k) || a.name.localeCompare(b.name));
+// Before changing a bill's usual amount from month k on, lock the old amount
+// into the earlier months so their totals don't change.
+function keepPastAmounts(b, k){
+  for(let m = b.start && b.start > firstKey() ? b.start : firstKey(); m < k; m = addMonths(m, 1)){
+    if(!billActive(b, m) || (S.billAmts[m] && S.billAmts[m][b.id] != null)) continue;
+    S.billAmts[m] = S.billAmts[m] || {};
+    S.billAmts[m][b.id] = b.amount;
+  }
+}
+const sortedBills = k => activeBills(k).sort((a,b) => dueDate(a, k) - dueDate(b, k) || a.name.localeCompare(b.name));
 const isPaid = (k, id) => !!(S.paid[k] && S.paid[k][id]);
 const shortDay = d => d.toLocaleDateString(undefined, {month:'short', day:'numeric'});
 const startOfToday = () => { const t = new Date(); t.setHours(0,0,0,0); return t; };
@@ -1037,11 +1060,12 @@ function dueDate(b, k){
   const {y,m} = keyParts(dk);
   return new Date(y, m-1, Math.min(b.dueDay, daysInMonth(dk)));
 }
-// With bills listed, the monthly goal is their total (this month and later).
+// Keeps the stored goal matching this month's bills, so it's still right if
+// every bill is later deleted.
 function syncGoal(){
   if(!S.bills.length) return;
-  S.goal = round2(billsTotal());
-  S.monthGoals[nowKey()] = round2(monthBillsTotal(nowKey()));
+  S.goal = round2(monthBillsTotal(nowKey()));
+  S.monthGoals[nowKey()] = S.goal;
 }
 function billInfo(b, k){
   const due = dueDate(b, k), dueTxt = shortDay(due);
@@ -1067,6 +1091,11 @@ function renderBills(){
     return;
   }
   const list = sortedBills(k), total = monthBillsTotal(k);
+  if(!list.length){
+    $('billSummary').innerHTML = '';
+    $('billList').innerHTML = `<div class="empty">No bills in ${esc(monthName(k))}. Bills only show in the months between their first and last month.</div>`;
+    return;
+  }
   const paidList = list.filter(b => billInfo(b, k).paid);
   const paidAmt = paidList.reduce((a, b) => a + amountFor(b, k), 0);
   const all = paidList.length === list.length;
@@ -1094,7 +1123,7 @@ function askAlreadyPaid(b){
   if(b.autopay) return;
   const k = nowKey(), today = startOfToday();
   const fk = [k, b.nextMonth ? addMonths(k, -1) : null]
-    .find(x => x && dueDate(b, x) < today && !isPaid(x, b.id));
+    .find(x => x && billActive(b, x) && amountFor(b, x) > 0 && dueDate(b, x) < today && !isPaid(x, b.id));
   if(!fk) return;
   const due = dueDate(b, fk);
   if(confirm(`Have you already paid ${b.name} for ${monthName(fk).split(' ')[0]}? It was due ${shortDay(due)}.`)){
@@ -1134,6 +1163,10 @@ function openBill(id){
   setBillScope('month');
   setBillNext(b ? b.nextMonth : S.lastBillNext);
   setBillAuto(b ? b.autopay : false);
+  // New bills start in the month you're looking at; older bills may have no first month.
+  $('bStart').value = b ? (b.start || '') : viewKey;
+  $('bStart').max = $('bEnd').max = nowKey();
+  setBillEnd(b ? !!b.end : false, b && b.end ? b.end : viewKey);
   show('billSheet');
   if(!b) $('bName').focus({preventScroll:true});
 }
@@ -1146,21 +1179,25 @@ function saveBill(){
   const oneMonth = !!editing && bScope === 'month';
   if(!(amount > 0) && !(oneMonth && amount === 0)){ toast(oneMonth ? 'Enter the amount (0 is OK for just this month)' : 'Enter the amount'); $('bAmt').focus(); return; }
   if(!(day >= 1 && day <= 31)){ toast('Due day should be 1 to 31'); $('bDay').focus(); return; }
+  const start = /^\d{4}-\d{2}$/.test($('bStart').value) ? $('bStart').value : null;
+  const end = bEnded ? ($('bEnd').value || null) : null;
+  if(bEnded && !/^\d{4}-\d{2}$/.test(end)){ toast('Pick the last month you paid it'); return; }
+  if(start && end && end < start){ toast("The last month can't be before the first"); return; }
   const wasEditing = !!editing, k = viewKey, mon = monthName(k).split(' ')[0];
   let b;
   if(editing){
     b = S.bills.find(x => x.id === editing.id);
     Object.assign(b, {name, dueDay: day, nextMonth: bNext, autopay: bAuto});
+    Object.assign(b, {start, end});
     if(bScope === 'month') setMonthAmount(b, k, amount);
-    else {
-      // New usual amount. The month you're looking at follows it too.
-      const old = amountFor(b, k);
+    else if(amount !== b.amount){
+      // New usual amount from this month on; earlier months keep the old one.
+      keepPastAmounts(b, k);
       b.amount = amount;
       if(S.billAmts[k]){ delete S.billAmts[k][b.id]; if(!Object.keys(S.billAmts[k]).length) delete S.billAmts[k]; }
-      if(k !== nowKey()) S.monthGoals[k] = round2(goalFor(k) + amount - old);
     }
   }
-  else { b = {id: uid(), name, amount, dueDay: day, nextMonth: bNext, autopay: bAuto}; S.bills.push(b); }
+  else { b = {id: uid(), name, amount, dueDay: day, nextMonth: bNext, autopay: bAuto, start, end}; S.bills.push(b); }
   S.lastBillNext = bNext;
   closeSheets();
   askAlreadyPaid(b);
@@ -1174,6 +1211,13 @@ function setBillNext(v){
   bNext = !!v;
   document.querySelectorAll('[data-bnext]').forEach(x => x.classList.toggle('on', x.dataset.bnext === (bNext ? '1' : '0')));
   updBillHint();
+}
+let bEnded = false;
+function setBillEnd(v, month){
+  bEnded = !!v;
+  document.querySelectorAll('[data-bend]').forEach(x => x.classList.toggle('on', x.dataset.bend === (bEnded ? '1' : '0')));
+  $('bEndWrap').hidden = !bEnded;
+  if(month) $('bEnd').value = month;
 }
 let bScope = 'month';
 function setBillScope(v){
@@ -1190,7 +1234,7 @@ function setBillAuto(v){
 }
 function updBillHint(){
   const day = parseInt($('bDay').value, 10) || 1;
-  const k = nowKey(), mon = monthName(k).split(' ')[0];
+  const k = viewKey, mon = monthName(k).split(' ')[0];
   $('bHint').textContent = `${mon}'s bill is due ${shortDay(dueDate({dueDay: Math.min(Math.max(day, 1), 31), nextMonth: bNext}, k))}.`;
 }
 
@@ -1993,6 +2037,8 @@ document.addEventListener('click', ev => {
     else if(act === 'taxes'){ taxYear = +v; switchTab('taxes'); }
     return;
   }
+  const be = ev.target.closest('[data-bend]');
+  if(be){ setBillEnd(be.dataset.bend === '1'); return; }
   const bs = ev.target.closest('[data-bscope]');
   if(bs){ setBillScope(bs.dataset.bscope); return; }
   const rd = ev.target.closest('[data-rdel]');
