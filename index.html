@@ -167,6 +167,9 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .kv.total{font-weight:700;border-top:1px solid var(--line);margin-top:6px;padding-top:9px}
 .kv.total span:first-child{color:var(--text)}
 .kv.sep{border-top:1px solid var(--line);margin-top:6px;padding-top:9px}
+.kv.sub{padding-left:12px;font-size:13px}
+.kv.sub span{color:var(--muted)}
+.bk .hint{margin-top:4px}
 
 .mcard{background:var(--surface);border:1px solid var(--line);border-radius:20px;margin-bottom:10px;overflow:hidden}
 .mhead{display:flex;align-items:center;gap:10px;width:100%;padding:14px 16px 12px}
@@ -492,6 +495,19 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
       <button class="btn primary" onclick="savePayment()">Save</button>
     </div>
     <button class="btn danger" id="pDel" onclick="deletePayment()">Delete payment</button>
+  </div>
+</div>
+
+<!-- Year-end tax summary -->
+<div class="overlay" id="sumSheet">
+  <div class="sheet" role="dialog" aria-labelledby="sTitle">
+    <div class="grab"></div>
+    <h3 id="sTitle">Tax summary</h3>
+    <div id="sumBody"></div>
+    <div class="actions" style="margin-top:18px">
+      <button class="btn soft" onclick="closeSheets()">Close</button>
+      <button class="btn primary" onclick="saveSummary()"><i data-ic="download"></i>Save as a file</button>
+    </div>
   </div>
 </div>
 
@@ -1148,7 +1164,8 @@ function renderTaxes(){
     <div class="kv"><span>Paid so far</span><span>${fmt(paid)}</span></div>
     <div class="kv"><span>Still to pay</span><span>${fmt(Math.max(t.total - paid, 0))}</span></div>
     <p class="hint">${y === cy ? `If ${y} ended today. It grows as you earn.` : `Based on everything logged for ${y}.`}${TAX_RULES[y] ? '' : ` Using ${Math.max(...Object.keys(TAX_RULES))} tax rules until ${y}'s are added.`}</p>
-    ${t.fed < 1000 ? `<p class="hint">Federal tax is under $1,000 so far, so there's no penalty if you skip quarterly payments. You'd pay it when you file instead.</p>` : ''}</div>`;
+    ${t.fed < 1000 ? `<p class="hint">Federal tax is under $1,000 so far, so there's no penalty if you skip quarterly payments. You'd pay it when you file instead.</p>` : ''}
+    <button class="btn soft" style="margin-top:14px" onclick="openSummary()">${ic('receipt')}${y === cy ? 'Year-end summary (so far)' : y + ' year-end summary'}</button></div>`;
 
   const qs = quarterInfo(y);
   $('taxQNote').textContent = 'tap ✓ when you pay';
@@ -1216,6 +1233,115 @@ function deletePayment(){
   payCtx = null;
   save(); closeSheets(); renderAll();
   toast('Payment deleted', () => { S.taxPayments.push(item); save(); renderAll(); toast('Restored'); });
+}
+
+/* ---------- year-end summary ---------- */
+// Work tools go on Schedule C as Supplies (line 22) or Other expenses (line 27a).
+const SUPPLY_KINDS = ['Tools & equipment', 'Supplies', 'Safety gear'];
+const BRING_LIST = ['This summary', 'Photos of your work-tool receipts',
+  'Any 1099 forms you got (DoorDash, or your boss if he sends one)',
+  'Your total miles driven this year and your commute miles (odometer readings help)',
+  'Photo ID and your Social Security card', 'Bank account and routing number, for a refund'];
+function yearSummary(y){
+  const inY = ts => new Date(ts).getFullYear() === y;
+  const add = (m, k, v) => { m[k] = (m[k] || 0) + v; };
+  const b = bizNumbers(y), t = taxFor(b.profit, y);
+  const bySrc = {}, otherBy = {};
+  S.entries.filter(e => e.type === 'income' && SE_CATS.includes(e.category) && inY(e.ts)).forEach(e => add(bySrc, e.category, e.amount));
+  const tools = S.entries.filter(e => e.taxKind && inY(e.ts)).sort((a, c) => a.ts - c.ts);
+  tools.filter(e => !SUPPLY_KINDS.includes(e.taxKind)).forEach(e => add(otherBy, e.taxKind, e.amount));
+  const pays = paymentsFor(y).sort((a, c) => a.q - c.q || a.ts - c.ts);
+  return {y, b, t, bySrc, tools, otherBy, pays,
+          supplies: sum(tools.filter(e => SUPPLY_KINDS.includes(e.taxKind)), 'amount'),
+          other: Object.values(otherBy).reduce((a, v) => a + v, 0),
+          trips: S.trips.filter(x => inY(x.ts)).length,
+          paidIrs: sum(pays.filter(p => p.who === 'irs'), 'amount'),
+          paidKs: sum(pays.filter(p => p.who === 'ks'), 'amount')};
+}
+// "Still owed", or "Paid extra" when payments are more than the estimate (that comes back as a refund).
+const owedLine = (who, owed, paid) => owed - paid >= 0 ? [`${who} still owed`, fmt2(owed - paid)] : [`${who} paid extra (refund)`, fmt2(paid - owed)];
+const longDay = ts => new Date(ts).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
+const payLine = p => `${WHO[p.who]} ${QUARTERS[p.q-1][0]} · ${longDay(p.ts)}${p.conf ? ' · #' + p.conf : ''}`;
+function openSummary(){
+  const s = yearSummary(taxYear), {y, b, t} = s;
+  const kv = (l, v, cls) => `<div class="kv ${cls || ''}"><span>${esc(l)}</span><span>${v}</span></div>`;
+  const sec = (h, body) => `<div class="bk"><h4>${h}</h4>${body}</div>`;
+  $('sTitle').textContent = `${y} tax summary${y === new Date().getFullYear() ? ' so far' : ''}`;
+  $('sumBody').innerHTML =
+    `<p class="hint" style="margin:-6px 2px 0">Numbers your tax preparer needs, from what you logged. Line numbers are for the IRS forms.</p>` +
+    sec('Business profit (Schedule C)',
+      kv('Income (line 1)', fmt2(b.income)) +
+      Object.entries(s.bySrc).map(([k, v]) => kv(k, fmt2(v), 'sub')).join('') +
+      kv(`Car: ${miles1(b.miles)} work miles × ${fmt2(S.mileageRate)} (line 9)`, fmt2(b.mileDed)) +
+      kv('Supplies & tools (line 22)', fmt2(s.supplies)) +
+      kv('Other expenses (line 27a)', fmt2(s.other)) +
+      Object.entries(s.otherBy).map(([k, v]) => kv(k, fmt2(v), 'sub')).join('') +
+      kv('Net profit (line 31)', fmt2(b.profit), 'total')) +
+    sec('Self-employment tax (Schedule SE)',
+      kv('Social Security & Medicare', fmt2(t.se)) +
+      kv('Half of it is deductible (Schedule 1)', fmt2(t.se / 2))) +
+    sec('Estimated tax',
+      kv('Federal income tax', fmt2(t.income)) +
+      kv('Federal total', fmt2(t.fed)) +
+      kv('Kansas', fmt2(t.ks)) +
+      kv('Total', fmt2(t.total), 'total')) +
+    sec('Payments you made',
+      (s.pays.length ? s.pays.map(p => kv(payLine(p), fmt2(p.amount), 'sub')).join('') : `<p class="hint">None recorded.</p>`) +
+      kv('IRS (Form 1040 estimated payments)', fmt2(s.paidIrs), 'sep') +
+      kv('Kansas (K-40 estimated payments)', fmt2(s.paidKs)) +
+      kv(...owedLine('Federal', t.fed, s.paidIrs), 'total') +
+      kv(...owedLine('Kansas', t.ks, s.paidKs))) +
+    sec(`Receipts and trips`,
+      `<p class="hint">${s.tools.length} work-tool purchase${s.tools.length === 1 ? '' : 's'} and ${s.trips} work trip${s.trips === 1 ? '' : 's'} logged. The saved file lists every receipt.</p>
+       <p class="hint">Mileage uses ${fmt2(S.mileageRate)} a mile. Check the IRS rate for ${y} and update it in Settings if it's different.</p>`) +
+    sec('Bring to your tax appointment', BRING_LIST.map(x => `<div class="kv sub"><span>• ${esc(x)}</span></div>`).join('')) +
+    `<p class="hint">Estimates only. A VITA volunteer (free tax help) can check them and file for you. If a 1099 shows a different income than this, tell them; the 1099 is what the IRS sees.</p>`;
+  show('sumSheet');
+}
+// Plain-text copy you can save, print or show at a tax appointment.
+function summaryText(s){
+  const {y, b, t} = s, W = 46;
+  const line = (l, v) => '  ' + l.padEnd(W - 2) + ' ' + v;
+  const head = h => '\n' + h.toUpperCase() + '\n' + '-'.repeat(h.length);
+  const out = [
+    `PAYOFF TRACKER: ${y} TAX SUMMARY`,
+    `Made ${longDay(Date.now())}. Estimates from what was logged in the app.`,
+    'Single · Kansas · self-employed (car detailing contractor, DoorDash)',
+    head('Business profit (Schedule C)'),
+    line('Income (line 1)', fmt2(b.income)),
+    ...Object.entries(s.bySrc).map(([k, v]) => line('  ' + k, fmt2(v))),
+    line(`Car: ${miles1(b.miles)} work miles x ${fmt2(S.mileageRate)} (line 9)`, fmt2(b.mileDed)),
+    line('Supplies & tools (line 22)', fmt2(s.supplies)),
+    line('Other expenses (line 27a)', fmt2(s.other)),
+    ...Object.entries(s.otherBy).map(([k, v]) => line('  ' + k, fmt2(v))),
+    line('Net profit (line 31)', fmt2(b.profit)),
+    head('Self-employment tax (Schedule SE)'),
+    line('Social Security & Medicare', fmt2(t.se)),
+    line('Half is deductible (Schedule 1)', fmt2(t.se / 2)),
+    head('Estimated tax'),
+    line('Federal income tax', fmt2(t.income)),
+    line('Federal total', fmt2(t.fed)),
+    line('Kansas', fmt2(t.ks)),
+    line('Total', fmt2(t.total)),
+    head('Payments made'),
+    ...(s.pays.length ? s.pays.map(p => line(payLine(p), fmt2(p.amount))) : ['  None recorded']),
+    line('IRS total', fmt2(s.paidIrs)),
+    line('Kansas total', fmt2(s.paidKs)),
+    line(...owedLine('Federal', t.fed, s.paidIrs)),
+    line(...owedLine('Kansas', t.ks, s.paidKs)),
+    head('Work-tool receipts'),
+    ...(s.tools.length ? s.tools.map(e => line(`${longDay(e.ts)} · ${e.taxKind}${e.note ? ' · ' + e.note : ''}`, fmt2(e.amount))) : ['  None logged']),
+    head('Bring to your tax appointment'),
+    ...BRING_LIST.map(x => '  - ' + x),
+    '',
+    `Mileage uses ${fmt2(S.mileageRate)} a mile; check the IRS rate for ${y}.`,
+    'Estimates only. Have a tax preparer (VITA is free) check them.'
+  ];
+  return out.join('\n') + '\n';
+}
+async function saveSummary(){
+  const s = yearSummary(taxYear);
+  if(await saveFile(`taxes-${s.y}-summary.txt`, summaryText(s), 'text/plain')) toast('Summary saved');
 }
 
 /* ---------- backup, restore and import ---------- */
