@@ -1082,8 +1082,7 @@ function renderBills(){
       ${i.auto && !isPaid(k, b.id)
         ? `<span class="check auto ${i.paid ? 'on' : ''}" title="Autopay">${ic(i.paid ? 'check' : 'auto')}</span>`
         : `<button class="check ${i.paid ? 'on' : ''}" data-paid="${b.id}" aria-label="${i.paid ? 'Mark ' + esc(b.name) + ' unpaid' : 'Mark ' + esc(b.name) + ' paid'}">${ic('check')}</button>`}
-      <button class="row" data-edit="b:${b.id}"><span class="rt"><span class="r1">${esc(b.name)}</span><span class="r2 ${i.cls}">${esc(i.text)}</span></span>
-        <span style="text-align:right"><span class="amt" style="display:block">${fmt2(amountFor(b, k))}</span>${amountFor(b, k) !== b.amount ? `<span class="r2">usually ${fmt2(b.amount)}</span>` : ''}</span></button>
+      <button class="row" data-edit="b:${b.id}"><span class="rt"><span class="r1">${esc(b.name)}</span><span class="r2 ${i.cls}">${esc(i.text)}</span></span><span class="amt">${fmt2(amountFor(b, k))}</span></button>
     </div>`;
   }).join('') + '</div>';
 }
@@ -1163,7 +1162,7 @@ function saveBill(){
   askAlreadyPaid(b);
   syncGoal(); save(); renderAll();
   toast(wasEditing && bScope === 'month' && amount !== b.amount
-    ? `${mon}'s ${b.name} is ${fmt2(amount)} · usually ${fmt2(b.amount)}`
+    ? `${mon}'s ${b.name} is now ${fmt2(amount)}`
     : (wasEditing ? 'Bill updated' : 'Bill added') + ` · ${mon}'s goal is now ${fmt2(goalFor(k))}`);
 }
 
