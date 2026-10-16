@@ -385,7 +385,7 @@ a.row .ext{color:var(--faint)}
     </div>
     <div class="group">
       <h3>How your data is saved</h3>
-      <p class="hint" style="margin-top:0">Everything stays on this phone, inside this app. Nothing is sent anywhere and there's no account. Each entry is filed under the month it happened, so months start fresh on their own.</p>
+      <p class="hint" style="margin-top:0">Everything stays on this phone, inside this app. Nothing is sent anywhere and there's no account. Each entry is filed under the month it happened, so months start fresh on their own. Backups include your receipt photos.</p>
       <p class="hint">Always open it from your home-screen icon. On iPhone, the home-screen app and a regular Safari tab keep separate data.</p>
     </div>
     <input type="file" id="fileIn" accept=".json,.csv,application/json,text/csv,text/plain" hidden>
@@ -1532,7 +1532,7 @@ function renderReminders(){
 /* ---------- year-end summary ---------- */
 // Work tools go on Schedule C as Supplies (line 22) or Other expenses (line 27a).
 const SUPPLY_KINDS = ['Tools & equipment', 'Supplies', 'Safety gear'];
-const BRING_LIST = ['This summary', 'Photos of your work-tool receipts',
+const BRING_LIST = ['This summary', 'Your work-tool receipts (paper, or the photos in the app)',
   'Any 1099 forms you got (DoorDash, or your boss if he sends one)',
   'Your total miles driven this year and your commute miles (odometer readings help)',
   'Photo ID and your Social Security card', 'Bank account and routing number, for a refund'];
@@ -1588,6 +1588,7 @@ function openSummary(){
       kv(...owedLine('Kansas', t.ks, s.paidKs))) +
     sec(`Receipts and trips`,
       `<p class="hint">${s.tools.length} work-tool purchase${s.tools.length === 1 ? '' : 's'} and ${s.trips} work trip${s.trips === 1 ? '' : 's'} logged. The saved file lists every receipt.</p>
+       ${s.tools.length ? `<p class="hint">${photoLine(s.tools)}</p>` : ''}
        <p class="hint">Each trip uses the IRS mileage rate for the day you drove (Settings → Mileage rates).</p>`) +
     sec('Bring to your tax appointment', BRING_LIST.map(x => `<div class="kv sub"><span>• ${esc(x)}</span></div>`).join('')) +
     `<p class="hint">Estimates only. A VITA volunteer (free tax help) can check them and file for you. If a 1099 shows a different income than this, tell them; the 1099 is what the IRS sees.</p>`;
@@ -1626,7 +1627,8 @@ function summaryText(s){
     line(...owedLine('Federal', t.fed, s.paidIrs)),
     line(...owedLine('Kansas', t.ks, s.paidKs)),
     head('Work-tool receipts'),
-    ...(s.tools.length ? s.tools.map(e => line(`${longDay(e.ts)} · ${e.taxKind}${e.note ? ' · ' + e.note : ''}`, fmt2(e.amount))) : ['  None logged']),
+    ...(s.tools.length ? s.tools.map(e => line(`${longDay(e.ts)} · ${e.taxKind}${e.note ? ' · ' + e.note : ''}${e.receipt ? ' (photo)' : ''}`, fmt2(e.amount))) : ['  None logged']),
+    ...(s.tools.length ? ['  ' + photoLine(s.tools), '  (photo) = the receipt photo is saved in the app on that entry.'] : []),
     head('Bring to your tax appointment'),
     ...BRING_LIST.map(x => '  - ' + x),
     '',
@@ -1634,6 +1636,12 @@ function summaryText(s){
     'Estimates only. Have a tax preparer (VITA is free) check them.'
   ];
   return out.join('\n') + '\n';
+}
+// "3 of 4 have a receipt photo in the app" (and which ones don't).
+function photoLine(tools){
+  const n = tools.filter(e => e.receipt).length;
+  return n === tools.length ? `All ${n === 1 ? 'of them has' : n + ' have'} a receipt photo in the app.`
+    : `${n} of ${tools.length} have a receipt photo in the app. Keep the paper receipt for the rest.`;
 }
 async function saveSummary(){
   const s = yearSummary(taxYear);
@@ -1661,7 +1669,15 @@ async function saveFile(name, text, type){
     const file = new File([blob], name, {type});
     if(navigator.canShare({files:[file]})){
       try{ await navigator.share({files:[file]}); return true; }
-      catch(e){ if(e.name === 'AbortError') return false; }
+      catch(e){
+        if(e.name === 'AbortError') return false;
+        // iPhones only open the share sheet right after a tap. Gathering a
+        // big backup can take too long, so ask for one more tap.
+        if(e.name === 'NotAllowedError') return new Promise(res => {
+          toast('Your file is ready', () => navigator.share({files:[file]}).then(() => res(true), () => res(false)), 'Save');
+          setTimeout(() => res(false), 6000);
+        });
+      }
     }
   }
   const a = document.createElement('a');
@@ -1672,7 +1688,12 @@ async function saveFile(name, text, type){
 }
 async function backup(){
   const name = 'payoff-tracker-backup-' + dateStr(Date.now()) + '.json';
-  const json = JSON.stringify({app:'payoff-tracker', version:1, exportedAt:new Date().toISOString(), data:S});
+  // Receipt photos go in the same file, written as long text after the rest.
+  const receipts = {};
+  for(const e of S.entries.filter(x => x.receipt)){
+    try{ const d = await getReceipt(e.id); if(d) receipts[e.id] = d; }catch(err){}
+  }
+  const json = JSON.stringify({app:'payoff-tracker', version:1, exportedAt:new Date().toISOString(), data:S, receipts});
   if(!(await saveFile(name, json, 'application/json'))) return;
   S.lastBackup = Date.now(); save(); renderAll();
   toast('Backup saved');
@@ -1685,7 +1706,7 @@ $('fileIn').addEventListener('change', async ev => {
   try{ text = (await f.text()).replace(/^﻿/, ''); }catch(e){ toast("Couldn't read that file"); return; }
   if(text.trim().startsWith('{')) restoreBackup(text); else importCSV(text);
 });
-function restoreBackup(text){
+async function restoreBackup(text){
   let obj = null;
   try{ obj = JSON.parse(text); }catch(e){}
   const data = obj && obj.app === 'payoff-tracker' ? obj.data
@@ -1693,7 +1714,17 @@ function restoreBackup(text){
   if(!data || !Array.isArray(data.entries)){ toast("That file isn't a Payoff Tracker backup"); return; }
   const incoming = normalize(data);
   const when = obj.exportedAt ? new Date(obj.exportedAt).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) : 'an older version';
-  if(!confirm(`Replace everything in the app with this backup from ${when}?\n\nIt has ${incoming.entries.length} entries, ${incoming.trips.length} trips and ${incoming.bills.length} bills.`)) return;
+  const photos = obj.receipts && typeof obj.receipts === 'object' ? obj.receipts : {};
+  const isPhoto = d => typeof d === 'string' && d.startsWith('data:image/');
+  const nPhotos = incoming.entries.filter(e => e.receipt && isPhoto(photos[e.id])).length;
+  if(!confirm(`Replace everything in the app with this backup from ${when}?\n\nIt has ${incoming.entries.length} entries, ${incoming.trips.length} trips${nPhotos ? `, ${incoming.bills.length} bills and ${nPhotos} receipt photo${nPhotos === 1 ? '' : 's'}` : ` and ${incoming.bills.length} bills`}.`)) return;
+  // Photos the backup doesn't have stay if they're still on this phone.
+  for(const e of incoming.entries.filter(x => x.receipt)){
+    try{
+      if(isPhoto(photos[e.id])) await putReceipt(e.id, photos[e.id]);
+      else if(!(await getReceipt(e.id))) e.receipt = false;
+    }catch(err){ e.receipt = false; }
+  }
   const prev = S;
   S = incoming;
   if(S.monthGoals[nowKey()] == null) S.monthGoals[nowKey()] = S.goal;
@@ -2123,9 +2154,10 @@ async function exportCSV(scope){
 
 /* ---------- feedback ---------- */
 let toastTimer;
-function toast(msg, undo){
+function toast(msg, undo, label = 'Undo'){
   const t = $('toast'), b = $('toastUndo');
   $('toastMsg').textContent = msg;
+  b.textContent = label;
   b.hidden = !undo;
   t.classList.toggle('has-undo', !!undo);
   b.onclick = undo ? () => { t.classList.remove('show'); undo(); } : null;
