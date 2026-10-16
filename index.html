@@ -1045,6 +1045,7 @@ function syncGoal(){
 }
 function billInfo(b, k){
   const due = dueDate(b, k), dueTxt = shortDay(due);
+  if(amountFor(b, k) === 0) return {paid:true, skip:true, cls:'', text:'Nothing this month'};
   if(isPaid(k, b.id)) return {paid:true, cls:'due-paid', text:'Paid ' + shortDay(new Date(S.paid[k][b.id]))};
   const days = Math.round((due - startOfToday()) / 864e5);
   // Autopay bills count as paid once their due date arrives.
@@ -1079,7 +1080,8 @@ function renderBills(){
   $('billList').innerHTML = '<div class="list">' + list.map(b => {
     const i = billInfo(b, k);
     return `<div class="brow ${i.paid ? 'paid' : ''}">
-      ${i.auto && !isPaid(k, b.id)
+      ${i.skip ? `<span class="check on" title="Nothing this month">${ic('check')}</span>`
+        : i.auto && !isPaid(k, b.id)
         ? `<span class="check auto ${i.paid ? 'on' : ''}" title="Autopay">${ic(i.paid ? 'check' : 'auto')}</span>`
         : `<button class="check ${i.paid ? 'on' : ''}" data-paid="${b.id}" aria-label="${i.paid ? 'Mark ' + esc(b.name) + ' unpaid' : 'Mark ' + esc(b.name) + ' paid'}">${ic('check')}</button>`}
       <button class="row" data-edit="b:${b.id}"><span class="rt"><span class="r1">${esc(b.name)}</span><span class="r2 ${i.cls}">${esc(i.text)}</span></span><span class="amt">${fmt2(amountFor(b, k))}</span></button>
@@ -1140,7 +1142,9 @@ function saveBill(){
   const amount = Math.round(parseFloat($('bAmt').value) * 100) / 100;
   const day = parseInt($('bDay').value, 10);
   if(!name){ toast('Give the bill a name'); $('bName').focus(); return; }
-  if(!(amount > 0)){ toast('Enter the amount'); $('bAmt').focus(); return; }
+  // $0 is allowed for a single month (a bill you didn't have yet); the usual amount must be more.
+  const oneMonth = !!editing && bScope === 'month';
+  if(!(amount > 0) && !(oneMonth && amount === 0)){ toast(oneMonth ? 'Enter the amount (0 is OK for just this month)' : 'Enter the amount'); $('bAmt').focus(); return; }
   if(!(day >= 1 && day <= 31)){ toast('Due day should be 1 to 31'); $('bDay').focus(); return; }
   const wasEditing = !!editing, k = viewKey, mon = monthName(k).split(' ')[0];
   let b;
