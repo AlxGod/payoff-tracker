@@ -146,6 +146,17 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .actions{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:4px}
 .odo-out{text-align:center;font-size:13.5px;color:var(--muted);margin:-2px 0 14px}
 .odo-out b{color:var(--amber)}
+.stepper{display:flex;align-items:center;justify-content:space-between;background:var(--surface-2);border-radius:14px;padding:5px;margin-bottom:6px}
+.stepper button{width:52px;height:44px;border-radius:10px;background:var(--surface);font-size:24px;font-weight:600;text-align:center}
+.stepper button:active{opacity:.7}
+.stepper span{font-family:var(--num);font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
+.linkbtn{color:var(--amber);font-weight:650}
+.gh{font-size:13px;font-weight:700;margin:16px 2px 4px}
+.gh.ok{color:var(--teal)} .gh.no{color:var(--coral)}
+.gitem{padding:9px 2px;font-size:14px}
+.gitem+.gitem{border-top:1px solid var(--line)}
+.gitem b{display:block;font-weight:650}
+.gitem span{color:var(--muted);font-size:13px}
 
 .mcard{background:var(--surface);border:1px solid var(--line);border-radius:20px;margin-bottom:10px;overflow:hidden}
 .mhead{display:flex;align-items:center;gap:10px;width:100%;padding:14px 16px 12px}
@@ -291,6 +302,16 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
         <label for="rateIn">Mileage deduction rate ($ per mile)</label>
         <input class="inp" id="rateIn" inputmode="decimal" placeholder="0.70">
       </div>
+      <div class="pair">
+        <div class="field">
+          <label for="payIn">Weekly detailing pay ($)</label>
+          <input class="inp" id="payIn" inputmode="decimal" placeholder="600">
+        </div>
+        <div class="field">
+          <label for="commIn">Commission per car ($)</label>
+          <input class="inp" id="commIn" inputmode="decimal" placeholder="25">
+        </div>
+      </div>
       <button class="btn primary" onclick="saveSettings()">Save</button>
       <p class="hint">A new goal applies to this month and future months. Past months keep the goal they had. The IRS sets a new mileage rate every January.</p>
     </div>
@@ -342,6 +363,22 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
     </div>
     <div class="money"><span>$</span><input id="eAmt" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
     <div id="eCatWrap"><div class="flabel">Category</div><div class="chips" id="eChips"></div></div>
+    <div id="eDetWrap" hidden>
+      <div class="seg">
+        <button data-det="pay">Weekly pay</button>
+        <button data-det="commission">Commission</button>
+      </div>
+      <div id="eCarsWrap" hidden>
+        <div class="flabel">Cars sold</div>
+        <div class="stepper"><button data-cars="-1" aria-label="One less car">−</button><span id="eCars">1</span><button data-cars="1" aria-label="One more car">+</button></div>
+        <p class="hint" id="eCarsHint" style="margin:0 2px 14px"></p>
+      </div>
+    </div>
+    <div id="eToolWrap" hidden>
+      <div class="flabel">What kind of work tool?</div>
+      <div class="chips" id="eToolChips" style="margin-bottom:6px"></div>
+      <p class="hint" style="margin:0 2px 14px">Keep the receipt (snap a photo). <button class="linkbtn" onclick="openGuide()">What counts?</button></p>
+    </div>
     <div class="flabel">Date</div>
     <input class="inp" type="date" id="eDate">
     <input class="inp" id="eNote" placeholder="Note (optional)" autocomplete="off">
@@ -373,6 +410,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
     <div class="flabel">Date</div>
     <input class="inp" type="date" id="tDate">
     <input class="inp" id="tNote" placeholder="Note (optional)" autocomplete="off">
+    <p class="hint" style="margin:-4px 2px 14px">Only log work driving, like DoorDash or errands for the shop. Your drive to and from the shop is commuting, and that doesn't count.</p>
     <div class="actions">
       <button class="btn soft" onclick="closeSheets()">Cancel</button>
       <button class="btn primary" onclick="saveTrip()">Save</button>
@@ -412,6 +450,18 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
   </div>
 </div>
 
+<!-- What counts as a work tool (opens on top of the entry sheet) -->
+<div class="overlay" id="guideSheet" style="z-index:60">
+  <div class="sheet" role="dialog" aria-labelledby="gTitle">
+    <div class="grab"></div>
+    <h3 id="gTitle">What counts as a work tool?</h3>
+    <p class="hint" style="margin:-6px 2px 0">Things you buy with your own money because you need them for detailing. These lower the income you pay tax on.</p>
+    <div id="guideBody"></div>
+    <p class="hint">Keep every receipt. A photo in your Photos app is fine. If something is half for work and half for personal use, only count the work half.</p>
+    <button class="btn primary" style="margin-top:14px" onclick="closeGuide()">Got it</button>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button id="toastUndo" hidden>Undo</button></div>
 
 <script>
@@ -420,8 +470,25 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
    normalize() instead. */
 const KEY = 'payoff-tracker-v1';
 const OLD_KEY = 'route-to-zero-data';
-const INCOME_CATS = ['DoorDash','Cash','Other job','Other'];
-const EXPENSE_CATS = ['Food','Car maintenance','Phone','Supplies','Personal','Other'];
+const INCOME_CATS = ['Detailing','DoorDash','Cash','Other job','Other'];
+const EXPENSE_CATS = ['Work tool','Food','Car maintenance','Phone','Supplies','Personal','Other'];
+// Work tools a self-employed detailer can reasonably deduct (kept as e.taxKind),
+// and common things that don't count. Shown in the "What counts?" guide.
+const TOOL_KINDS = [
+  ['Tools & equipment', 'Brushes, pads, polisher, vacuum, attachments, buckets, a tool bag or caddy'],
+  ['Supplies', "Chemicals, towels or gloves, but only ones the shop doesn't buy for you"],
+  ['Safety gear', 'Knee pads, safety glasses, a mask or respirator'],
+  ['Work-only clothes', "A uniform or logo shirt you wouldn't wear as everyday clothes"],
+  ['Training', 'Detailing classes, ceramic-coating or other certifications']
+];
+const NOT_DEDUCTIBLE = [
+  ['Driving to and from the shop', "That's commuting. Only errands for the job count."],
+  ['Anything your boss buys or pays you back for', "It wasn't your money, so it isn't your deduction."],
+  ['Regular clothes and shoes', 'Even if you only wear them to work.'],
+  ['Food and drinks on your shift', ''],
+  ['Cleaning or detailing your own car', ''],
+  ['Things you mostly use for personal stuff', 'Like a phone, unless you count only the work share.']
+];
 const TYPES = {
   income:   {label:'Earned', icon:'cash', cls:'inc'},
   gas:      {label:'Gas',    icon:'gas',  cls:'exp'},
@@ -455,6 +522,7 @@ let tab = 'home';
 let lastNowKey = null;
 let editing = null;    // {kind:'e'|'t', id} while editing an existing item
 let eType = 'income', eCat = null, tMode = 'total', bNext = false, bAuto = false;
+let eKind = 'pay', eCars = 1, eTool = null, eAuto = false; // detailing pay / commission / work tool
 const openMonths = new Set();
 
 /* ---------- helpers ---------- */
@@ -499,14 +567,17 @@ function cleanNum(el){
 /* ---------- saving and loading ---------- */
 function defaults(){
   return {version:1, entries:[], trips:[], bills:[], paid:{}, goal:660, monthGoals:{}, mileageRate:0.70,
-          lastOdometer:null, lastIncomeCat:'DoorDash', lastBackup:null, backupSnooze:null, lastBillNext:false};
+          weeklyPay:600, commissionRate:25, lastOdometer:null, lastIncomeCat:'DoorDash', lastBackup:null, backupSnooze:null, lastBillNext:false};
 }
 function normalize(d){
   const s = {...defaults(), ...d};
   s.entries = (Array.isArray(s.entries) ? s.entries : [])
     .filter(e => e && isFinite(e.amount) && isFinite(e.ts))
     .map(e => ({id: e.id || uid(), type: TYPES[e.type] ? e.type : 'purchase',
-                amount: +e.amount, category: e.category || null, note: e.note || '', ts: +e.ts}));
+                amount: +e.amount, category: e.category || null, note: e.note || '', ts: +e.ts,
+                kind: e.kind === 'pay' || e.kind === 'commission' ? e.kind : null,
+                cars: e.kind === 'commission' ? Math.max(parseInt(e.cars) || 1, 1) : null,
+                taxKind: e.taxKind ? String(e.taxKind) : null}));
   s.trips = (Array.isArray(s.trips) ? s.trips : [])
     .filter(t => t && isFinite(t.miles) && isFinite(t.ts))
     .map(t => ({id: t.id || uid(), miles: +t.miles, note: t.note || '', ts: +t.ts,
@@ -574,7 +645,8 @@ function switchTab(t){
   tab = t;
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 's-' + t));
   document.querySelectorAll('.nb').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
-  if(t === 'settings'){ $('goalIn').value = goalFor(nowKey()); $('rateIn').value = S.mileageRate; }
+  if(t === 'settings'){ $('goalIn').value = goalFor(nowKey()); $('rateIn').value = S.mileageRate;
+                        $('payIn').value = S.weeklyPay; $('commIn').value = S.commissionRate; }
   renderAll();
   $('scroller').scrollTop = 0;
 }
@@ -673,10 +745,16 @@ function activityList(entries, trips){
   });
   return out + (curDay ? '</div>' : '');
 }
+function entryLabel(e){
+  if(e.kind === 'pay') return 'Detailing pay';
+  if(e.kind === 'commission') return 'Commission · ' + e.cars + (e.cars === 1 ? ' car' : ' cars');
+  if(e.taxKind) return 'Work tool · ' + e.taxKind;
+  return e.category || TYPES[e.type].label;
+}
 function entryRow(e){
   const T = TYPES[e.type];
-  const title = e.note || e.category || T.label;
-  const sub = [e.note && e.category ? e.category : (e.note ? T.label : ''), timeStr(e.ts)].filter(Boolean).join(' · ');
+  const title = e.note || entryLabel(e);
+  const sub = [e.note ? entryLabel(e) : '', timeStr(e.ts)].filter(Boolean).join(' · ');
   return `<button class="row" data-edit="e:${e.id}">
     <span class="dot ${T.cls}">${ic(T.icon)}</span>
     <span class="rt"><span class="r1">${esc(title)}</span><span class="r2">${esc(sub)}</span></span>
@@ -701,7 +779,7 @@ function renderMiles(){
   $('yDed').textContent = fmt(yM * S.mileageRate);
   $('tripList').innerHTML = d.trips.length
     ? activityList([], d.trips)
-    : `<div class="empty">No trips logged ${viewKey === nowKey() ? 'yet this month' : 'this month'}. Every mile you log adds to your tax deduction.</div>`;
+    : `<div class="empty">No trips logged ${viewKey === nowKey() ? 'yet this month' : 'this month'}. Every work mile you log adds to your tax deduction.</div>`;
 }
 
 function breakdown(title, map, color){
@@ -1089,7 +1167,12 @@ function openEntry(type, id){
   $('eDate').value = e ? dateStr(e.ts) : defaultDate();
   $('eDate').max = dateStr(Date.now());
   $('eDel').hidden = !e;
+  eKind = e && e.kind ? e.kind : 'pay';
+  eCars = e && e.cars ? e.cars : 1;
+  eTool = e ? e.taxKind : null;
+  eAuto = false;
   setType(eType, !!e);
+  if(!e) fillDet();
   show('entrySheet');
   if(!e) $('eAmt').focus({preventScroll:true});
 }
@@ -1103,20 +1186,56 @@ function setType(t, keepCat){
   if(cats && eCat && !cats.includes(eCat)) cats = [...cats, eCat];
   $('eCatWrap').hidden = !cats;
   $('eChips').innerHTML = cats ? cats.map(c => `<button class="chip ${c === eCat ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('') : '';
+  updExtras();
 }
+const isDet = () => eType === 'income' && eCat === 'Detailing';
+const isTool = () => eType === 'purchase' && eCat === 'Work tool';
+// Shows the detailing (pay / commission) or work-tool parts of the entry sheet.
+function updExtras(){
+  $('eDetWrap').hidden = !isDet();
+  $('eToolWrap').hidden = !isTool();
+  if(isDet()){
+    document.querySelectorAll('[data-det]').forEach(b => b.classList.toggle('on', b.dataset.det === eKind));
+    $('eCarsWrap').hidden = eKind !== 'commission';
+    $('eCars').textContent = eCars;
+    $('eCarsHint').textContent = `${eCars} × ${fmt2(S.commissionRate)} = ${fmt2(eCars * S.commissionRate)}`;
+  } else if(eAuto){ $('eAmt').value = ''; eAuto = false; }
+  if(isTool()) $('eToolChips').innerHTML = TOOL_KINDS.map(([k]) => `<button class="chip ${k === eTool ? 'on' : ''}" data-tool="${esc(k)}">${esc(k)}</button>`).join('');
+}
+// Fills in the weekly pay, or cars × commission, unless you typed your own amount.
+function fillDet(){
+  if(!isDet()) return;
+  if(eKind === 'commission' || eAuto || !$('eAmt').value){
+    $('eAmt').value = String(eKind === 'pay' ? S.weeklyPay : eCars * S.commissionRate);
+    eAuto = true;
+  }
+}
+function setDet(k){ eKind = k; if(k === 'pay') eAuto = true; fillDet(); updExtras(); }
+function stepCars(n){ eCars = Math.min(Math.max(eCars + n, 1), 99); fillDet(); updExtras(); }
+
+function openGuide(){
+  const item = ([k, why]) => `<div class="gitem"><b>${esc(k)}</b>${why ? `<span>${esc(why)}</span>` : ''}</div>`;
+  $('guideBody').innerHTML = `<div class="gh ok">Counts</div>${TOOL_KINDS.map(item).join('')}
+    <div class="gh no">Doesn't count</div>${NOT_DEDUCTIBLE.map(item).join('')}`;
+  show('guideSheet');
+}
+function closeGuide(){ $('guideSheet').classList.remove('show'); }
 function saveEntry(){
   const amount = Math.round(parseFloat($('eAmt').value) * 100) / 100;
   if(!(amount > 0)){ toast('Enter an amount first'); $('eAmt').focus(); return; }
   const note = $('eNote').value.trim();
   const category = eType === 'gas' ? null : eCat;
+  if(isTool() && !eTool){ toast('Pick what kind of work tool it is'); return; }
+  const extra = {kind: isDet() ? eKind : null, cars: isDet() && eKind === 'commission' ? eCars : null,
+                 taxKind: isTool() ? eTool : null};
   const before = monthData(nowKey()).left;
   const wasEditing = !!editing;
   let e;
   if(editing){
     e = S.entries.find(x => x.id === editing.id);
-    Object.assign(e, {type: eType, amount, category, note, ts: tsFromDate($('eDate').value, e.ts)});
+    Object.assign(e, {type: eType, amount, category, note, ts: tsFromDate($('eDate').value, e.ts)}, extra);
   } else {
-    e = {id: uid(), type: eType, amount, category, note, ts: tsFromDate($('eDate').value)};
+    e = {id: uid(), type: eType, amount, category, note, ts: tsFromDate($('eDate').value), ...extra};
     S.entries.push(e);
   }
   if(eType === 'income' && category) S.lastIncomeCat = category;
@@ -1200,8 +1319,11 @@ function deleteItem(kind){
 /* ---------- settings ---------- */
 function saveSettings(){
   const g = parseFloat($('goalIn').value), r = parseFloat($('rateIn').value);
+  const p = parseFloat($('payIn').value), c = parseFloat($('commIn').value);
   if(!S.bills.length && isFinite(g) && g >= 0){ S.goal = g; S.monthGoals[nowKey()] = g; }
   if(isFinite(r) && r > 0) S.mileageRate = r;
+  if(isFinite(p) && p > 0) S.weeklyPay = p;
+  if(isFinite(c) && c > 0) S.commissionRate = c;
   save(); renderAll(); toast('Settings saved');
 }
 async function exportCSV(scope){
@@ -1253,22 +1375,30 @@ document.addEventListener('click', ev => {
   const p = ev.target.closest('[data-paid]');
   if(p){ togglePaid(p.dataset.paid, viewKey); return; }
   const c = ev.target.closest('[data-cat]');
-  if(c){ eCat = eCat === c.dataset.cat ? null : c.dataset.cat; setType(eType, true); return; }
+  if(c){ eCat = eCat === c.dataset.cat ? null : c.dataset.cat; setType(eType, true); fillDet(); return; }
+  const dt = ev.target.closest('[data-det]');
+  if(dt){ setDet(dt.dataset.det); return; }
+  const cr = ev.target.closest('[data-cars]');
+  if(cr){ stepCars(+cr.dataset.cars); return; }
+  const tl = ev.target.closest('[data-tool]');
+  if(tl){ eTool = tl.dataset.tool; updExtras(); return; }
   const m = ev.target.closest('[data-month]');
   if(m){ const k = m.dataset.month; openMonths.has(k) ? openMonths.delete(k) : openMonths.add(k); renderMonths(); return; }
   const g = ev.target.closest('[data-goto]');
   if(g){ viewKey = g.dataset.goto; switchTab('home'); return; }
+  if(ev.target.id === 'guideSheet'){ closeGuide(); return; }
   if(ev.target.classList.contains('overlay')) closeSheets();
 });
 document.addEventListener('keydown', ev => {
-  if(ev.key === 'Escape') closeSheets();
+  if(ev.key === 'Escape') $('guideSheet').classList.contains('show') ? closeGuide() : closeSheets();
   if(ev.key === 'Enter' && ev.target.matches('.overlay input:not([type=date])')){
     ev.preventDefault();
     $('entrySheet').classList.contains('show') ? saveEntry()
       : $('billSheet').classList.contains('show') ? saveBill() : saveTrip();
   }
 });
-['eAmt','tMiles','tStart','tEnd','goalIn','rateIn','bAmt','bDay'].forEach(id => $(id).addEventListener('input', ev => cleanNum(ev.target)));
+['eAmt','tMiles','tStart','tEnd','goalIn','rateIn','payIn','commIn','bAmt','bDay'].forEach(id => $(id).addEventListener('input', ev => cleanNum(ev.target)));
+$('eAmt').addEventListener('input', () => { eAuto = false; }); // you typed your own amount
 // When the app comes back after midnight or a new month, move to the new month.
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState !== 'visible') return;
