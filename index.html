@@ -221,7 +221,10 @@ a.row .ext{color:var(--faint)}
 .nag .txt{flex:1 1 170px}
 .nag b{color:var(--text);display:block;font-size:14.5px}
 .nag-btns{display:flex;gap:4px;margin-left:auto}
-.nag button{font-weight:700;font-size:13px;padding:9px 13px;border-radius:10px}
+.nag button,.nag a{font-weight:700;font-size:13px;padding:9px 13px;border-radius:10px;text-decoration:none;white-space:nowrap}
+.nag .soft{background:var(--surface-2);color:var(--text)}
+.nb{position:relative}
+.nb .badge{position:absolute;top:3px;left:calc(50% + 7px);width:9px;height:9px;border-radius:50%;background:var(--coral);border:2px solid var(--bg)}
 .nag .go{background:var(--amber);color:var(--on-amber)}
 .nag .later{color:var(--muted)}
 
@@ -261,6 +264,7 @@ a.row .ext{color:var(--faint)}
   <section class="screen active" id="s-home">
     <div class="viewing" id="viewH" hidden><span>Looking back at a past month</span><button onclick="goNow()">Back to now</button></div>
     <div id="nag"></div>
+    <div id="homeRem"></div>
     <div class="card ring-card">
       <div class="ring">
         <svg viewBox="0 0 200 200"><circle class="trk" cx="100" cy="100" r="86"/><circle class="fil" id="ringFill" cx="100" cy="100" r="86"/><circle class="fil" id="ringBonus" cx="100" cy="100" r="86"/></svg>
@@ -293,6 +297,7 @@ a.row .ext{color:var(--faint)}
 
   <!-- TAXES -->
   <section class="screen" id="s-taxes">
+    <div id="taxRem"></div>
     <div id="taxYears"></div>
     <div id="taxTop"></div>
     <div id="taxEst"></div>
@@ -381,7 +386,7 @@ a.row .ext{color:var(--faint)}
 <nav class="nav"><div class="nav-in">
   <button class="nb active" data-tab="home" onclick="switchTab('home')"><i data-ic="home"></i>Home</button>
   <button class="nb" data-tab="bills" onclick="switchTab('bills')"><i data-ic="receipt"></i>Bills</button>
-  <button class="nb" data-tab="taxes" onclick="switchTab('taxes')"><i data-ic="percent"></i>Taxes</button>
+  <button class="nb" data-tab="taxes" onclick="switchTab('taxes')"><i data-ic="percent"></i>Taxes<span class="badge" id="taxBadge" hidden></span></button>
   <button class="nb" data-tab="months" onclick="switchTab('months')"><i data-ic="chart"></i>Months</button>
   <button class="nb" data-tab="miles" onclick="switchTab('miles')"><i data-ic="road"></i>Miles</button>
   <button class="nb" data-tab="settings" onclick="switchTab('settings')"><i data-ic="sliders"></i>Settings</button>
@@ -677,6 +682,7 @@ function normalize(d){
     .map(r => ({from: r.from, rate: +r.rate})).sort((a, b) => a.from < b.from ? -1 : 1);
   if(!s.mileageRates.length) s.mileageRates = DEFAULT_RATES.map(r => ({...r}));
   delete s.mileageRate; // older versions had one rate for every year
+  if(!s.dismissed || typeof s.dismissed !== 'object') s.dismissed = {};
   if(!s.monthGoals || typeof s.monthGoals !== 'object') s.monthGoals = {};
   if(!s.paid || typeof s.paid !== 'object') s.paid = {};
   delete s.theme;
@@ -748,7 +754,7 @@ function shiftMonth(n){
 function goNow(){ viewKey = nowKey(); renderAll(); }
 
 /* ---------- rendering ---------- */
-function renderAll(){ renderHeader(); renderHome(); renderBills(); renderTaxes(); renderMiles(); renderMonths(); renderSettings(); }
+function renderAll(){ renderHeader(); renderHome(); renderBills(); renderTaxes(); renderMiles(); renderMonths(); renderSettings(); renderReminders(); }
 
 function renderHeader(){
   const monthTab = tab === 'home' || tab === 'bills' || tab === 'miles';
@@ -1335,6 +1341,49 @@ function deletePayment(){
   toast('Payment deleted', () => { S.taxPayments.push(item); save(); renderAll(); toast('Restored'); });
 }
 
+/* ---------- tax reminders ---------- */
+// Listed on the Taxes tab, with a dot on its button. Payment reminders also
+// show on Home, but only from a week before the due date. Each one goes away
+// by itself once it's handled, or when you tap "Got it".
+const IRS_MILEAGE = 'https://www.irs.gov/tax-professionals/standard-mileage-rates';
+function taxReminders(){
+  const now = new Date(), cy = now.getFullYear(), today = startOfToday(), out = [];
+  const latest = Math.max(...Object.keys(TAX_RULES).map(Number));
+  const rateFrom = day => S.mileageRates.some(r => r.from >= day);
+  if(!TAX_RULES[cy]) out.push({id: 'rules-' + cy, title: `${cy} tax numbers aren't in the app yet`,
+    text: `Estimates use ${latest} numbers for now, which is close. Ask Claude to add ${cy}'s.`});
+  if(!rateFrom(cy + '-01-01')) out.push({id: 'rate-' + cy, title: `Add the ${cy} mileage rate`,
+    text: 'The IRS sets a new business mileage rate each year. Add it in Settings.', link: IRS_MILEAGE, settings: true});
+  const md = now.getMonth() * 100 + now.getDate();   // Jun 15 = 515, Jul 31 = 631
+  if(md >= 515 && md <= 631 && !rateFrom(cy + '-07-01')) out.push({id: 'mid-' + cy, title: 'Mid-year mileage check',
+    text: 'The IRS sometimes changes the mileage rate on July 1 (it did in 2022 and 2026). Check whether it changed this year.',
+    link: IRS_MILEAGE, settings: true, dismissLabel: 'No change'});
+  [cy - 1, cy].forEach(y => quarterInfo(y).forEach(q => {
+    const days = Math.round((q.due - today) / 864e5);
+    if(days > 7 || days < -30) return;
+    const owe = ['irs', 'ks'].filter(w => !paymentsFor(y, q.n, w).length && (w === 'irs' ? q.fed : q.ks) >= 1);
+    if(!owe.length) return;
+    out.push({id: `pay-${y}-${q.n}`, pay: true, year: y,
+      title: days < 0 ? `${q.label} ${y} tax payment was due ${shortDay(q.due)}`
+        : days === 0 ? `${q.label} tax payment is due today` : `${q.label} tax payment due ${shortDay(q.due)}`,
+      text: owe.map(w => `${WHO[w]} about ${fmt(Math.ceil(w === 'irs' ? q.fed : q.ks))}`).join(', ') + '. Check it off on the Taxes tab once you pay.'});
+  }));
+  return out.filter(r => !S.dismissed[r.id]);
+}
+function remCard(r, onHome){
+  const btns = `<button class="later" data-rem="dismiss:${r.id}">${r.dismissLabel || 'Got it'}</button>` +
+    (r.settings ? `<button class="soft" data-rem="settings">Settings</button>` : '') +
+    (r.link ? `<a class="go" href="${r.link}" target="_blank" rel="noopener">IRS page</a>` : '') +
+    (r.pay && onHome ? `<button class="go" data-rem="taxes:${r.year}">Taxes</button>` : '');
+  return `<div class="nag"><div class="txt"><b>${esc(r.title)}</b>${esc(r.text)}</div><div class="nag-btns">${btns}</div></div>`;
+}
+function renderReminders(){
+  const rs = taxReminders();
+  $('taxRem').innerHTML = rs.map(r => remCard(r)).join('');
+  $('homeRem').innerHTML = viewKey === nowKey() ? rs.filter(r => r.pay).map(r => remCard(r, true)).join('') : '';
+  $('taxBadge').hidden = !rs.length;
+}
+
 /* ---------- year-end summary ---------- */
 // Work tools go on Schedule C as Supplies (line 22) or Other expenses (line 27a).
 const SUPPLY_KINDS = ['Tools & equipment', 'Supplies', 'Safety gear'];
@@ -1853,6 +1902,14 @@ document.addEventListener('click', ev => {
   if(p){ togglePaid(p.dataset.paid, viewKey); return; }
   const c = ev.target.closest('[data-cat]');
   if(c){ eCat = eCat === c.dataset.cat ? null : c.dataset.cat; setType(eType, true); fillDet(); return; }
+  const rm = ev.target.closest('[data-rem]');
+  if(rm){
+    const [act, v] = rm.dataset.rem.split(':');
+    if(act === 'dismiss'){ S.dismissed[v] = Date.now(); save(); renderAll(); }
+    else if(act === 'settings') switchTab('settings');
+    else if(act === 'taxes'){ taxYear = +v; switchTab('taxes'); }
+    return;
+  }
   const rd = ev.target.closest('[data-rdel]');
   if(rd){ removeRate(rd.dataset.rdel); return; }
   const tp = ev.target.closest('[data-tpay]');
