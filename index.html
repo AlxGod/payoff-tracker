@@ -170,6 +170,10 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .qhead span{font-size:12.5px;font-weight:600;color:var(--muted);text-align:right}
 .kv.total{font-weight:700;border-top:1px solid var(--line);margin-top:6px;padding-top:9px}
 .kv.total span:first-child{color:var(--text)}
+a.row{color:inherit;text-decoration:none}
+a.row .ext{color:var(--faint)}
+.fhead{font-size:12.5px;font-weight:700;color:var(--muted);margin:16px 2px 8px}
+.fhead:first-child{margin-top:0}
 .kv.sep{border-top:1px solid var(--line);margin-top:6px;padding-top:9px}
 .kv.sub{padding-left:12px;font-size:13px}
 .kv.sub span{color:var(--muted)}
@@ -295,10 +299,9 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
     <div class="sec" style="margin-top:6px"><span>Quarterly payments</span><span id="taxQNote"></span></div>
     <div id="taxQuarters" style="margin-top:8px"></div>
     <div class="group">
-      <h3>How to pay</h3>
-      <p class="hint" style="margin-top:0"><b>IRS:</b> search "IRS Direct Pay". Choose <b>Estimated Tax</b>, then <b>1040ES</b>, and the tax year. Save the confirmation number it gives you.</p>
-      <p class="hint"><b>Kansas:</b> pay on the Kansas Department of Revenue website as <b>estimated tax (K-40ES)</b>. Same due dates as the IRS.</p>
-      <p class="hint">These are estimates for self-employed work (Detailing and DoorDash income), for a single person in Kansas. For your tax return, the free VITA tax help can check them.</p>
+      <h3>Forms &amp; links</h3>
+      <div id="taxForms"></div>
+      <p class="hint">The app's numbers are estimates for self-employed work (Detailing and DoorDash income), for a single person in Kansas. A tax preparer, like the free VITA help, fills these forms in from your year-end summary.</p>
     </div>
   </section>
 
@@ -581,6 +584,7 @@ const ICONS = {
   receipt:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   x:'<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  ext:'<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   percent:'<path d="M18.5 5.5l-13 13"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/>',
   auto:'<path d="M19.5 11A7.5 7.5 0 0 0 6 6.5"/><path d="M5 3.5v3.5h3.5"/><path d="M4.5 13A7.5 7.5 0 0 0 18 17.5"/><path d="M19 20.5V17h-3.5"/>'
 };
@@ -1252,6 +1256,43 @@ function renderTaxes(){
     };
     return `<div class="qcard ${q.future ? 'future' : ''}"><div class="qhead">${q.label} · ${q.months}<span>${status}</span></div>${rowFor('irs')}${rowFor('ks')}</div>`;
   }).join('');
+  renderForms(y);
+}
+
+// Official forms and pages for the year, grouped by when you need them.
+// [name, what it's for, link]
+const IRS = 'https://www.irs.gov/forms-pubs/about-';
+function taxForms(y){
+  return [
+    ['Quarterly (Apr 15, Jun 15, Sep 15, Jan 15)', [
+      ['IRS Direct Pay', 'Pay federal estimated tax here. Choose Estimated Tax → 1040ES → ' + y + '. Save the confirmation number.', 'https://www.irs.gov/payments/direct-pay'],
+      ['Form 1040-ES', 'Federal estimated tax worksheet and due dates. Paying online means no voucher to mail.', IRS + 'form-1040-es'],
+      ['Kansas online payment', 'Pay Kansas estimated tax (K-40ES) online.', 'https://www.ksrevenue.gov/eserviiest.html'],
+      ['Kansas K-40ES', 'Kansas worksheet and vouchers. Needed once you\'ll owe Kansas $500 or more for the year.', `https://www.ksrevenue.gov/pdf/k-40es${String(y).slice(2)}.pdf`]
+    ]],
+    [`Yearly (tax return for ${y}, due Apr 15, ${y + 1})`, [
+      ['Form 1040', 'Your main federal return. Your IRS quarterly payments go on it.', IRS + 'form-1040'],
+      ['Schedule C', 'Business profit: income, car miles, supplies and other expenses. All in your year-end summary.', IRS + 'schedule-c-form-1040'],
+      ['Schedule SE', 'Social Security & Medicare tax on your profit.', IRS + 'schedule-se-form-1040'],
+      ['Schedule 1', 'Carries your profit to the 1040, plus the deduction for half your SE tax.', IRS + 'schedule-1-form-1040'],
+      ['Schedule 2', 'Carries your SE tax to the 1040.', IRS + 'schedule-2-form-1040'],
+      ['Form 8995', 'The 20% deduction on business profit.', IRS + 'form-8995'],
+      ['Kansas K-40', 'Your Kansas return. Your Kansas quarterly payments go on it. On the Kansas site, search "K-40".', 'https://www.ksrevenue.gov/']
+    ]],
+    ['Forms you might get (not ones you file)', [
+      ['1099-NEC', "Sent to you by DoorDash or your boss if they paid you enough. Don't file it, just use its numbers. No 1099? You still report the income.", IRS + 'form-1099-nec']
+    ]],
+    ['Free help filing', [
+      ['Find VITA free tax help', 'Volunteers prepare and file your return for free. Bring your year-end summary.', 'https://irs.treasury.gov/freetaxprep/'],
+      ['IRS Free File', 'Free tax software if you\'d rather do it yourself.', 'https://www.irs.gov/filing/irs-free-file-do-your-taxes-for-free']
+    ]]
+  ];
+}
+function renderForms(y){
+  $('taxForms').innerHTML = taxForms(y).map(([head, items]) => `<div class="fhead">${esc(head)}</div><div class="list">` +
+    items.map(([name, what, url]) => `<a class="row" href="${esc(url)}" target="_blank" rel="noopener">
+      <span class="rt"><span class="r1">${esc(name)}</span><span class="r2" style="white-space:normal">${esc(what)}</span></span>
+      <span class="ext">${ic('ext')}</span></a>`).join('') + '</div>').join('');
 }
 
 function openPayment(q, who){
