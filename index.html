@@ -331,15 +331,21 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
       </div>
       <p class="hint" id="goalFromBills" style="margin:0 2px 16px"></p>
       <div class="field">
-        <label for="rateIn">Mileage deduction rate ($ per mile)</label>
-        <input class="inp" id="rateIn" inputmode="decimal" placeholder="0.70">
-      </div>
-      <div class="field">
         <label for="commIn">Detailing commission per car ($)</label>
         <input class="inp" id="commIn" inputmode="decimal" placeholder="25">
       </div>
       <button class="btn primary" onclick="saveSettings()">Save</button>
-      <p class="hint">A new goal applies to this month and future months. Past months keep the goal they had. The IRS sets a new mileage rate every January.</p>
+      <p class="hint">A new goal applies to this month and future months. Past months keep the goal they had.</p>
+    </div>
+    <div class="group">
+      <h3>Mileage rates</h3>
+      <div id="rateList"></div>
+      <div class="pair" style="margin-top:14px">
+        <div><div class="flabel">Starting on</div><input class="inp" type="date" id="rDate"></div>
+        <div><div class="flabel">$ per mile</div><input class="inp" id="rRate" inputmode="decimal" placeholder="0.76" autocomplete="off"></div>
+      </div>
+      <button class="btn soft" onclick="addRate()"><i data-ic="plus"></i>Add a rate</button>
+      <p class="hint">Each trip uses the IRS business rate for the day you drove. The IRS announces new rates each year, sometimes mid-year too.</p>
     </div>
     <div class="group stack">
       <h3>Backup</h3>
@@ -549,6 +555,9 @@ const NOT_DEDUCTIBLE = [
   ['Cleaning or detailing your own car', ''],
   ['Things you mostly use for personal stuff', 'Like a phone, unless you count only the work share.']
 ];
+// IRS business mileage rates, each used from its start date on. New ones
+// get added in Settings when the IRS announces them.
+const DEFAULT_RATES = [{from:'2025-01-01', rate:0.70}, {from:'2026-01-01', rate:0.725}, {from:'2026-07-01', rate:0.76}];
 const TYPES = {
   income:   {label:'Earned', icon:'cash', cls:'inc'},
   gas:      {label:'Gas',    icon:'gas',  cls:'exp'},
@@ -571,6 +580,7 @@ const ICONS = {
   upload:'<path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/>',
   receipt:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  x:'<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
   percent:'<path d="M18.5 5.5l-13 13"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/>',
   auto:'<path d="M19.5 11A7.5 7.5 0 0 0 6 6.5"/><path d="M5 3.5v3.5h3.5"/><path d="M4.5 13A7.5 7.5 0 0 0 18 17.5"/><path d="M19 20.5V17h-3.5"/>'
 };
@@ -594,6 +604,12 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 function fmt(n){ const r = Math.round(n); return (r < 0 ? '-' : '') + '$' + Math.abs(r).toLocaleString(); }
 function fmt2(n){ return '$' + Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); }
 function miles1(n){ return (Math.round(n*10)/10).toLocaleString(undefined,{maximumFractionDigits:1}); }
+// The mileage rate in effect on a trip's date, and the deduction for a list of trips.
+function rateOn(ts){ const day = dateStr(ts); let r = S.mileageRates[0].rate; S.mileageRates.forEach(x => { if(x.from <= day) r = x.rate; }); return r; }
+const tripDed = trips => trips.reduce((a, t) => a + t.miles * rateOn(t.ts), 0);
+const fmtRate = r => '$' + r.toFixed(3).replace(/0$/, '');   // 0.725 → $0.725, 0.76 → $0.76
+// [rate, miles] pairs, for showing "412 mi × $0.725" lines.
+function milesByRate(trips){ const m = new Map(); trips.forEach(t => { const r = rateOn(t.ts); m.set(r, (m.get(r) || 0) + t.miles); }); return [...m]; }
 function mk(ts){ const d = new Date(ts); return d.getFullYear() + '-' + pad(d.getMonth()+1); }
 function nowKey(){ return mk(Date.now()); }
 function keyParts(k){ const [y,m] = k.split('-').map(Number); return {y, m}; }
@@ -627,7 +643,8 @@ function cleanNum(el){
 
 /* ---------- saving and loading ---------- */
 function defaults(){
-  return {version:1, entries:[], trips:[], bills:[], paid:{}, goal:660, monthGoals:{}, mileageRate:0.70,
+  return {version:1, entries:[], trips:[], bills:[], paid:{}, goal:660, monthGoals:{},
+          mileageRates: DEFAULT_RATES.map(r => ({...r})),
           commissionRate:25, taxPayments:[], lastOdometer:null, lastIncomeCat:'DoorDash', lastBackup:null, backupSnooze:null, lastBillNext:false};
 }
 function normalize(d){
@@ -651,6 +668,11 @@ function normalize(d){
   s.taxPayments = (Array.isArray(s.taxPayments) ? s.taxPayments : [])
     .filter(p => p && isFinite(p.amount) && isFinite(p.ts) && p.q >= 1 && p.q <= 4 && (p.who === 'irs' || p.who === 'ks'))
     .map(p => ({id: p.id || uid(), year: +p.year, q: +p.q, who: p.who, amount: +p.amount, ts: +p.ts, conf: p.conf || ''}));
+  s.mileageRates = (Array.isArray(s.mileageRates) ? s.mileageRates : [])
+    .filter(r => r && /^\d{4}-\d{2}-\d{2}$/.test(r.from) && r.rate > 0)
+    .map(r => ({from: r.from, rate: +r.rate})).sort((a, b) => a.from < b.from ? -1 : 1);
+  if(!s.mileageRates.length) s.mileageRates = DEFAULT_RATES.map(r => ({...r}));
+  delete s.mileageRate; // older versions had one rate for every year
   if(!s.monthGoals || typeof s.monthGoals !== 'object') s.monthGoals = {};
   if(!s.paid || typeof s.paid !== 'object') s.paid = {};
   delete s.theme;
@@ -662,7 +684,7 @@ function fromOldFormat(o){
   (o.monthsHistory || []).forEach(m => { tx.push(...(m.transactions || [])); trips.push(...(m.trips || [])); });
   return {
     entries: tx.map(t => t.type === 'custom' ? {...t, type:'purchase', category: t.category || 'Other'} : t),
-    trips, goal: o.goal || 660, mileageRate: o.mileageRate || 0.70,
+    trips, goal: o.goal || 660,
     lastOdometer: o.lastOdometer ?? null
   };
 }
@@ -709,7 +731,7 @@ function switchTab(t){
   tab = t;
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 's-' + t));
   document.querySelectorAll('.nb').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
-  if(t === 'settings'){ $('goalIn').value = goalFor(nowKey()); $('rateIn').value = S.mileageRate;
+  if(t === 'settings'){ $('goalIn').value = goalFor(nowKey());
                         $('commIn').value = S.commissionRate; }
   renderAll();
   $('scroller').scrollTop = 0;
@@ -859,12 +881,12 @@ function tripRow(t){
 function renderMiles(){
   const d = monthData(viewKey);
   const yr = keyParts(viewKey).y;
-  const yM = sum(S.trips.filter(t => new Date(t.ts).getFullYear() === yr), 'miles');
+  const yT = S.trips.filter(t => new Date(t.ts).getFullYear() === yr);
   $('mMiles').textContent = miles1(d.miles);
-  $('mDed').textContent = fmt(d.miles * S.mileageRate);
-  $('yMiles').textContent = miles1(yM);
+  $('mDed').textContent = fmt(tripDed(d.trips));
+  $('yMiles').textContent = miles1(sum(yT, 'miles'));
   $('yMilesL').textContent = 'miles in ' + yr;
-  $('yDed').textContent = fmt(yM * S.mileageRate);
+  $('yDed').textContent = fmt(tripDed(yT));
   $('tripList').innerHTML = d.trips.length
     ? activityList([], d.trips)
     : `<div class="empty">No trips logged ${viewKey === nowKey() ? 'yet this month' : 'this month'}. Every work mile you log adds to your tax deduction.</div>`;
@@ -887,14 +909,14 @@ function renderMonths(){
   const inYr = ts => new Date(ts).getFullYear() === yr;
   const yE = sum(S.entries.filter(e => inYr(e.ts) && e.type === 'income'), 'amount');
   const yS = sum(S.entries.filter(e => inYr(e.ts) && e.type !== 'income'), 'amount');
-  const yM = sum(S.trips.filter(t => inYr(t.ts)), 'miles');
+  const yT = S.trips.filter(t => inYr(t.ts)), yM = sum(yT, 'miles');
   $('yearCard').innerHTML = `<div class="group"><h3>${yr} so far</h3>
     <div class="stats">
       <div class="stat"><div class="v inc">${fmt(yE)}</div><div class="l">earned</div></div>
       <div class="stat"><div class="v exp">${fmt(yS)}</div><div class="l">spent</div></div>
       <div class="stat"><div class="v">${miles1(yM)}</div><div class="l">miles</div></div>
     </div>
-    <p class="hint">Estimated mileage deduction: <b>${fmt(yM * S.mileageRate)}</b> at ${fmt2(S.mileageRate)} a mile.</p></div>`;
+    <p class="hint">Estimated mileage deduction: <b>${fmt(tripDed(yT))}</b>, using the IRS rate on each trip's date.</p></div>`;
 
   $('monthCards').innerHTML = list.map(k => {
     const d = monthData(k);
@@ -916,7 +938,7 @@ function renderMonths(){
     if(d.miles > 0){
       driving = `<div class="bk"><h4>Driving</h4>
         <div class="kv"><span>Miles</span><span>${miles1(d.miles)} mi</span></div>
-        <div class="kv"><span>Est. deduction</span><span>${fmt(d.miles * S.mileageRate)}</span></div>
+        <div class="kv"><span>Est. deduction</span><span>${fmt(tripDed(d.trips))}</span></div>
         ${dd > 0 ? `<div class="kv"><span>DoorDash pay per mile</span><span>${fmt2(dd / d.miles)}</span></div>
         <div class="kv"><span>After gas</span><span>${fmt2((dd - gas) / d.miles)}</span></div>` : ''}</div>`;
     }
@@ -934,6 +956,7 @@ function renderMonths(){
 }
 
 function renderSettings(){
+  renderRates();
   $('expMonthLbl').textContent = 'Export ' + monthName(viewKey);
   $('expYearLbl').textContent = 'Export all of ' + new Date().getFullYear();
   const hasBills = S.bills.length > 0;
@@ -1116,9 +1139,9 @@ function bizNumbers(y, endTs){
   const inY = ts => new Date(ts).getFullYear() === y && (endTs == null || ts < endTs);
   const income = sum(S.entries.filter(e => e.type === 'income' && SE_CATS.includes(e.category) && inY(e.ts)), 'amount');
   const tools = sum(S.entries.filter(e => e.taxKind && inY(e.ts)), 'amount');
-  const miles = sum(S.trips.filter(t => inY(t.ts)), 'miles');
-  const mileDed = miles * S.mileageRate;
-  return {income, tools, miles, mileDed, profit: Math.max(income - tools - mileDed, 0)};
+  const trips = S.trips.filter(t => inY(t.ts));
+  const miles = sum(trips, 'miles'), mileDed = tripDed(trips);
+  return {income, tools, miles, mileDed, trips, profit: Math.max(income - tools - mileDed, 0)};
 }
 // Share of each paycheck to set aside: the full-year tax rate at your recent
 // pace (average weekly pay over the last 8 weeks you've been earning, × 52).
@@ -1308,7 +1331,8 @@ function openSummary(){
     sec('Business profit (Schedule C)',
       kv('Income (line 1)', fmt2(b.income)) +
       Object.entries(s.bySrc).map(([k, v]) => kv(k, fmt2(v), 'sub')).join('') +
-      kv(`Car: ${miles1(b.miles)} work miles × ${fmt2(S.mileageRate)} (line 9)`, fmt2(b.mileDed)) +
+      kv(`Car: ${miles1(b.miles)} work miles (line 9)`, fmt2(b.mileDed)) +
+      milesByRate(b.trips).map(([r, m]) => kv(`${miles1(m)} mi × ${fmtRate(r)}`, fmt2(m * r), 'sub')).join('') +
       kv('Supplies & tools (line 22)', fmt2(s.supplies)) +
       kv('Other expenses (line 27a)', fmt2(s.other)) +
       Object.entries(s.otherBy).map(([k, v]) => kv(k, fmt2(v), 'sub')).join('') +
@@ -1329,7 +1353,7 @@ function openSummary(){
       kv(...owedLine('Kansas', t.ks, s.paidKs))) +
     sec(`Receipts and trips`,
       `<p class="hint">${s.tools.length} work-tool purchase${s.tools.length === 1 ? '' : 's'} and ${s.trips} work trip${s.trips === 1 ? '' : 's'} logged. The saved file lists every receipt.</p>
-       <p class="hint">Mileage uses ${fmt2(S.mileageRate)} a mile. Check the IRS rate for ${y} and update it in Settings if it's different.</p>`) +
+       <p class="hint">Each trip uses the IRS mileage rate for the day you drove (Settings → Mileage rates).</p>`) +
     sec('Bring to your tax appointment', BRING_LIST.map(x => `<div class="kv sub"><span>• ${esc(x)}</span></div>`).join('')) +
     `<p class="hint">Estimates only. A VITA volunteer (free tax help) can check them and file for you. If a 1099 shows a different income than this, tell them; the 1099 is what the IRS sees.</p>`;
   show('sumSheet');
@@ -1346,7 +1370,8 @@ function summaryText(s){
     head('Business profit (Schedule C)'),
     line('Income (line 1)', fmt2(b.income)),
     ...Object.entries(s.bySrc).map(([k, v]) => line('  ' + k, fmt2(v))),
-    line(`Car: ${miles1(b.miles)} work miles x ${fmt2(S.mileageRate)} (line 9)`, fmt2(b.mileDed)),
+    line(`Car: ${miles1(b.miles)} work miles (line 9)`, fmt2(b.mileDed)),
+    ...milesByRate(b.trips).map(([r, m]) => line(`  ${miles1(m)} mi x ${fmtRate(r)}`, fmt2(m * r))),
     line('Supplies & tools (line 22)', fmt2(s.supplies)),
     line('Other expenses (line 27a)', fmt2(s.other)),
     ...Object.entries(s.otherBy).map(([k, v]) => line('  ' + k, fmt2(v))),
@@ -1370,7 +1395,7 @@ function summaryText(s){
     head('Bring to your tax appointment'),
     ...BRING_LIST.map(x => '  - ' + x),
     '',
-    `Mileage uses ${fmt2(S.mileageRate)} a mile; check the IRS rate for ${y}.`,
+    'Mileage uses the IRS business rate in effect on each trip date.',
     'Estimates only. Have a tax preparer (VITA is free) check them.'
   ];
   return out.join('\n') + '\n';
@@ -1710,12 +1735,32 @@ function deleteItem(kind){
 
 /* ---------- settings ---------- */
 function saveSettings(){
-  const g = parseFloat($('goalIn').value), r = parseFloat($('rateIn').value);
-  const c = parseFloat($('commIn').value);
+  const g = parseFloat($('goalIn').value), c = parseFloat($('commIn').value);
   if(!S.bills.length && isFinite(g) && g >= 0){ S.goal = g; S.monthGoals[nowKey()] = g; }
-  if(isFinite(r) && r > 0) S.mileageRate = r;
   if(isFinite(c) && c > 0) S.commissionRate = c;
   save(); renderAll(); toast('Settings saved');
+}
+function renderRates(){
+  const last = S.mileageRates.length === 1;
+  $('rateList').innerHTML = '<div class="list">' + [...S.mileageRates].reverse().map(r =>
+    `<div class="row"><span class="rt"><span class="r1">${fmtRate(r.rate)} a mile</span>
+      <span class="r2">From ${new Date(r.from + 'T12:00').toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'})}</span></span>
+      ${last ? '' : `<button class="iconbtn" data-rdel="${r.from}" aria-label="Remove this rate">${ic('x')}</button>`}</div>`).join('') + '</div>';
+}
+function addRate(){
+  const from = $('rDate').value, rate = parseFloat($('rRate').value);
+  if(!from){ toast('Pick the date the rate starts'); return; }
+  if(!(rate > 0 && rate < 5)){ toast('Enter the rate in dollars, like 0.76'); $('rRate').focus(); return; }
+  S.mileageRates = S.mileageRates.filter(r => r.from !== from).concat({from, rate}).sort((a, b) => a.from < b.from ? -1 : 1);
+  $('rDate').value = ''; $('rRate').value = '';
+  save(); renderAll(); toast(`${fmtRate(rate)} a mile from ${shortDay(new Date(from + 'T12:00'))}`);
+}
+function removeRate(from){
+  if(S.mileageRates.length < 2) return;
+  const prev = S.mileageRates;
+  S.mileageRates = prev.filter(r => r.from !== from);
+  save(); renderAll();
+  toast('Rate removed', () => { S.mileageRates = prev; save(); renderAll(); toast('Restored'); });
 }
 async function exportCSV(scope){
   const yr = new Date().getFullYear();
@@ -1767,6 +1812,8 @@ document.addEventListener('click', ev => {
   if(p){ togglePaid(p.dataset.paid, viewKey); return; }
   const c = ev.target.closest('[data-cat]');
   if(c){ eCat = eCat === c.dataset.cat ? null : c.dataset.cat; setType(eType, true); fillDet(); return; }
+  const rd = ev.target.closest('[data-rdel]');
+  if(rd){ removeRate(rd.dataset.rdel); return; }
   const tp = ev.target.closest('[data-tpay]');
   if(tp){ const [q, w] = tp.dataset.tpay.split(':'); openPayment(+q, w); return; }
   const ty = ev.target.closest('[data-tyear]');
@@ -1793,7 +1840,7 @@ document.addEventListener('keydown', ev => {
       : $('paySheet').classList.contains('show') ? savePayment() : saveTrip();
   }
 });
-['eAmt','tMiles','tStart','tEnd','goalIn','rateIn','commIn','bAmt','bDay','pAmt'].forEach(id => $(id).addEventListener('input', ev => cleanNum(ev.target)));
+['eAmt','tMiles','tStart','tEnd','goalIn','rRate','commIn','bAmt','bDay','pAmt'].forEach(id => $(id).addEventListener('input', ev => cleanNum(ev.target)));
 $('eAmt').addEventListener('input', () => { eAuto = false; }); // you typed your own amount
 // When the app comes back after midnight or a new month, move to the new month.
 document.addEventListener('visibilitychange', () => {
